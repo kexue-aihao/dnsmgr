@@ -189,39 +189,61 @@ class Awssync extends BaseController
                 }
             }
 
-            $all = [];
-            $page = 1;
-            $pageSize = 300;
-            $total = 0;
-            do {
-                $result = $dns->getDomainRecords($page, $pageSize, null, null, null, 'A', null, null);
-                if ($result === false) {
-                    return json(['code' => -1, 'msg' => '获取解析记录失败：' . $dns->getError()]);
-                }
-                foreach ($result['list'] as $row) {
-                    if (strtoupper($row['Type'] ?? 'A') !== 'A') {
-                        continue;
-                    }
-                    $rr = $this->parseRecordRr($row['Name'] ?? '', $drow['name']);
-                    $value = $row['Value'] ?? '';
-                    if (is_array($value)) {
-                        $value = $value[0] ?? '';
-                    }
-                    $lineName = isset($recordLine[$row['Line']]) ? $recordLine[$row['Line']]['name'] : ($row['Line'] ?? '');
-                    $row['rr'] = $rr;
-                    $row['LineName'] = $lineName;
-                    $host = $rr === '@' ? $drow['name'] : $rr . '.' . $drow['name'];
-                    $row['display'] = $host . ' → ' . $value . '（' . $lineName . '）';
-                    $all[] = $row;
-                }
-                $total = (int)($result['total'] ?? count($all));
-                $page++;
-            } while (count($all) < $total && $page <= 10 && !empty($result['list']));
+            $all = $this->fetchDomainARecords($dns, $drow, $recordLine, 'A');
+            if (empty($all)) {
+                $all = $this->fetchDomainARecords($dns, $drow, $recordLine, null);
+            }
+            if (empty($all)) {
+                return json(['code' => -1, 'msg' => '该域名下没有 A 记录，请先在 DNS 面板添加 A 记录后再试']);
+            }
 
             return json(['code' => 0, 'data' => $all, 'total' => count($all), 'domain' => $drow['name']]);
         } catch (\Throwable $e) {
             return json(['code' => -1, 'msg' => '读取解析记录失败：' . $e->getMessage()]);
         }
+    }
+
+    private function fetchDomainARecords($dns, array $drow, $recordLine, $typeFilter)
+    {
+        $all = [];
+        $page = 1;
+        $pageSize = 300;
+        $total = 0;
+        do {
+            $result = $dns->getDomainRecords($page, $pageSize, null, null, null, $typeFilter, null, null);
+            if ($result === false) {
+                throw new Exception('获取解析记录失败：' . $dns->getError());
+            }
+            foreach ($result['list'] as $row) {
+                if (strtoupper((string)($row['Type'] ?? 'A')) !== 'A') {
+                    continue;
+                }
+                $rr = $this->parseRecordRr($row['Name'] ?? '', $drow['name']);
+                $value = $this->normalizeRecordValue($row['Value'] ?? '');
+                $lineName = isset($recordLine[$row['Line']]) ? $recordLine[$row['Line']]['name'] : ($row['Line'] ?? '');
+                $row['rr'] = $rr;
+                $row['LineName'] = $lineName;
+                $host = $rr === '@' ? $drow['name'] : $rr . '.' . $drow['name'];
+                $row['display'] = $host . ' → ' . $value . '（' . $lineName . '）';
+                $all[] = $row;
+            }
+            $total = (int)($result['total'] ?? count($all));
+            $page++;
+        } while (count($all) < $total && $page <= 10 && !empty($result['list']));
+
+        return $all;
+    }
+
+    private function normalizeRecordValue($value)
+    {
+        if (is_array($value)) {
+            $first = $value[0] ?? '';
+            if (is_array($first)) {
+                return (string)($first['value'] ?? $first['Value'] ?? reset($first) ?: '');
+            }
+            return (string)$first;
+        }
+        return (string)$value;
     }
 
     private function parseRecordRr($name, $domainName)
@@ -320,7 +342,14 @@ class Awssync extends BaseController
             $task['addtime'] = time();
             $task['checknexttime'] = time();
             $task['active'] = 1;
-            Db::name('aws_sync')->insert($task);
+            try {
+                Db::name('aws_sync')->insert($task);
+            } catch (\Throwable $e) {
+                $hint = stripos($e->getMessage(), 'aws_sync') !== false
+                    ? '请在服务器执行 bash update.sh 创建 aws_sync 表'
+                    : '';
+                return json(['code' => -1, 'msg' => '保存失败：' . $e->getMessage() . ($hint ? '（' . $hint . '）' : '')]);
+            }
             return json(['code' => 0, 'msg' => '添加成功']);
         } elseif ($action == 'edit') {
             $id = input('post.id/d');

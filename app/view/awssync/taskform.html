@@ -1,281 +1,634 @@
 {extend name="common/layout" /}
+
 {block name="title"}AWS IP????{/block}
+
 {block name="main"}
+
 <style>
-    .control-label[is-required]:before { content: "*"; color: #f56c6c; margin-right: 4px; }
+
+    .control-label[is-required]:before {
+
+        content: "*";
+
+        color: #f56c6c;
+
+        margin-right: 4px;
+
+    }
+
     .tips{color: #f6a838; padding-left: 5px;}
+
     .record-preview{margin-top:8px;color:#666;font-size:13px;}
+
 </style>
+
 <div class="row" id="app">
+
 <div class="col-xs-12 center-block" style="float: none;">
+
 <div class="panel panel-default">
+
 <div class="panel-heading"><h3 class="panel-title"><a href="/awssync/task" class="btn btn-sm btn-default pull-right" style="margin-top:-6px"><i class="fa fa-reply fa-fw"></i> ??</a>{if $action=='edit'}??{else}??{/if} AWS IP????</h3></div>
+
 <div class="panel-body">
+
   {if empty($domains)}
+
   <div class="alert alert-warning">?????????? <a href="/domain">????</a> ??????????????</div>
+
   {/if}
   <div class="alert alert-info" id="tokenHint" style="display:none;">
     ??? <a href="/awssync/set"><b>API ??</b></a> ????? Token??????? AWS ??????
   </div>
+  <div class="alert alert-success" style="margin-bottom:15px;">
+    <strong>??????</strong>
+    ? ?????????????? ? ? ???? A ?? ? ? ??????????????? EC2 ? ? ????????????
+  </div>
   <form onsubmit="return false" method="post" class="form-horizontal" role="form" id="taskform">
+
     <div class="form-group">
+
         <label class="col-sm-3 control-label no-padding-right" is-required>? ????</label>
+
         <div class="col-sm-6">
+
             <div class="input-group">
+
                 <select name="did" v-model="set.did" @change="onDomainChange" class="form-control" required>
-                    <option value="">-- ????????????????????--</option>
+
+                    <option value="">-- ????????? --</option>
+
                     <option v-for="option in domainList" :value="option.id">{{option.label || option.name}}</option>
+
                 </select>
+
                 <span class="input-group-btn">
-                    <button type="button" @click="loadDomainRecords(false)" class="btn btn-info" :disabled="!set.did">??????</button>
+
+                    <button type="button" @click="loadDomainRecords" class="btn btn-info" :disabled="!set.did">??????</button>
+
                 </span>
+
             </div>
+
+            <p class="help-block tips">???????????????????????????????? A ???</p>
+
         </div>
+
     </div>
+
     <div class="form-group">
+
         <label class="col-sm-3 control-label no-padding-right" is-required>? ?? A ??</label>
+
         <div class="col-sm-6">
+
             <select name="recordid" v-model="set.recordid" @change="onRecordPick" class="form-control" required>
-                <option value="">-- ????????????? --</option>
+
+                <option value="">-- ???????? --</option>
+
                 <option v-for="option in recordList" :value="option.RecordId">{{option.display}}</option>
+
             </select>
+
             <p class="record-preview" v-if="selectedRecordPreview">{{selectedRecordPreview}}</p>
+
             <input type="hidden" name="rr" v-model="set.rr">
+
         </div>
+
     </div>
+
     <div class="form-group">
+
         <label class="col-sm-3 control-label no-padding-right" is-required>? AWS ??</label>
+
         <div class="col-sm-6">
+
             <div class="input-group">
+
                 <select v-model="selectedAccountId" class="form-control">
+
                     <option value="">-- ???????? --</option>
+
                     <option v-for="acc in accountOptions" :value="acc.id">{{acc.name}} ({{acc.id}})</option>
+
                 </select>
+
                 <span class="input-group-btn">
-                    <button type="button" @click="loadAwsAccounts(false)" class="btn btn-default">????</button>
+
+                    <button type="button" @click="loadAwsAccounts" class="btn btn-default">????</button>
+
                 </span>
+
             </div>
+
         </div>
+
     </div>
+
     <div class="form-group">
+
         <label class="col-sm-3 control-label no-padding-right" is-required>? AWS ??</label>
+
         <div class="col-sm-6">
+
             <div class="input-group">
+
                 <select v-model="selectedInstanceKey" @change="onInstancePick" class="form-control">
+
                     <option value="">-- ??????????? --</option>
+
                     <option v-for="item in instanceOptions" :value="item.key">{{item.label}}</option>
+
                 </select>
+
                 <span class="input-group-btn">
-                    <button type="button" @click="loadAwsInstances(false)" class="btn btn-info" :disabled="!selectedAccountId">????</button>
+
+                    <button type="button" @click="loadAwsInstances" class="btn btn-info" :disabled="!selectedAccountId">????</button>
+
                 </span>
+
             </div>
-            <input type="hidden" name="aws_account_id" v-model="set.aws_account_id">
-            <input type="hidden" name="aws_region" v-model="set.aws_region">
-            <input type="hidden" name="aws_instance_id" v-model="set.aws_instance_id">
+
+            <p class="help-block tips">??? <a href="/awssync/set">API ??</a> ?? Token????????????????</p>
+
         </div>
+
     </div>
+
+    <input type="hidden" name="aws_account_id" v-model="set.aws_account_id">
+    <input type="hidden" name="aws_region" v-model="set.aws_region">
+    <input type="hidden" name="aws_instance_id" v-model="set.aws_instance_id">
+
     <div class="form-group">
-        <label class="col-sm-3 control-label no-padding-right" is-required>????????</label>
+        <label class="col-sm-3 control-label no-padding-right" is-required>? ????????</label>
+
         <div class="col-sm-6">
+
             <input type="number" name="frequency" v-model="set.frequency" min="1" max="1440" class="form-control" required>
+
             <p class="help-block tips">?????????????? AWS IP ??? DNS ???</p>
+
         </div>
+
     </div>
+
     <div class="form-group">
+
         <label class="col-sm-3 control-label no-padding-right">??</label>
+
         <div class="col-sm-6">
-            <input type="text" name="remark" v-model="set.remark" placeholder="???" class="form-control">
+
+            <input type="text" name="remark" v-model="set.remark" placeholder="????? ???-1" class="form-control">
+
         </div>
+
     </div>
+
     <div class="form-group">
+
         <div class="col-sm-offset-3 col-sm-6">
-            <input type="button" @click="save" value="????" class="btn btn-primary btn-lg">
+
+            <input type="button" @click="save" value="????" class="btn btn-primary">
+
             <a href="/awssync/set" class="btn btn-default">API ??</a>
-            <a href="/awssync/task" class="btn btn-default">????</a>
+
         </div>
+
     </div>
+
   </form>
+
 </div>
+
 </div>
+
 </div>
+
 </div>
+
 {/block}
+
 {block name="script"}
+
 <script src="/static/js/layer/layer.js"></script>
+
 <script src="/static/js/vue-2.7.16.min.js"></script>
+
 <script>
+
 var info = {$infoJson|raw};
+
 var domainList = {$domainsJson|raw};
+
 new Vue({
+
     el: '#app',
+
     data: {
+
         action: '{$action}',
+
         set: {
-            id: '', remark: '', rr: '', did: '', recordid: '', recordinfo: '',
-            aws_account_id: '', aws_region: '', aws_instance_id: '', frequency: 3,
+
+            id: '',
+
+            remark: '',
+
+            rr: '',
+
+            did: '',
+
+            recordid: '',
+
+            recordinfo: '',
+
+            aws_account_id: '',
+
+            aws_region: 'ap-southeast-1',
+
+            aws_instance_id: '',
+
+            frequency: 3,
+
         },
+
         domainList: domainList,
+
         recordList: [],
+
         selectedRecordPreview: '',
+
         accountOptions: [],
+
         selectedAccountId: '',
+
         instanceOptions: [],
+
         selectedInstanceKey: '',
+
         loadingRecords: false,
+
     },
-    mounted() {
-        if(this.action == 'edit' && info){
-            Object.keys(info).forEach((key) => { this.$set(this.set, key, info[key]); });
-            if(this.set.recordinfo){
-                try {
-                    var recordinfo = JSON.parse(this.set.recordinfo);
-                    this.selectedRecordPreview = (this.set.rr === '@' ? '' : this.set.rr + '.') + '??????';
-                    this.recordList = [{RecordId:this.set.recordid, display: this.selectedRecordPreview, rr:this.set.rr, Line:recordinfo.Line, LineName:recordinfo.LineName, TTL:recordinfo.TTL}];
-                } catch(e) {}
-            }
-            if(this.set.aws_account_id){ this.selectedAccountId = this.set.aws_account_id; }
-            if(this.set.did){ this.loadDomainRecords(true); }
+
+    computed: {
+
+        currentDomainName: function(){
+
+            var d = this.domainList.find(function(x){ return String(x.id) === String(this.set.did); }.bind(this));
+
+            return d ? d.name : '';
+
         }
+
+    },
+
+    mounted() {
+
+        if(this.action == 'edit' && info){
+
+            Object.keys(info).forEach((key) => {
+
+                this.$set(this.set, key, info[key])
+
+            })
+
+            if(this.set.recordinfo){
+
+                try {
+
+                    var recordinfo = JSON.parse(this.set.recordinfo);
+
+                    var host = this.set.rr === '@' ? this.currentDomainName : (this.set.rr + '.' + this.currentDomainName);
+
+                    this.selectedRecordPreview = host + '??????????????';
+
+                    this.recordList = [{RecordId:this.set.recordid, display: this.selectedRecordPreview, rr:this.set.rr, Line:recordinfo.Line, LineName:recordinfo.LineName, TTL:recordinfo.TTL, Value:''}];
+
+                } catch(e) {}
+
+            }
+
+            if(this.set.aws_account_id){
+
+                this.selectedAccountId = this.set.aws_account_id;
+
+            }
+
+            if(this.set.did){
+
+                this.loadDomainRecords(true);
+
+            }
+
+        }
+
         var that = this;
         $.post('/awssync/preflight', function(res){
-            if(res && res.code == 0 && !res.token_ok){
-                document.getElementById('tokenHint').style.display = 'block';
+            if(res && res.code == 0){
+                if(!res.token_ok){ document.getElementById('tokenHint').style.display = 'block'; }
+                if(!res.table_ok){ layer.alert('???? aws_sync ????????????bash update.sh', {icon:0}); }
             }
         });
         this.loadAwsAccounts(true);
+
     },
+
     methods: {
+
         onDomainChange(){
+
             this.set.recordid = '';
+
             this.set.rr = '';
+
             this.set.recordinfo = '';
+
             this.recordList = [];
+
             this.selectedRecordPreview = '';
+
         },
+
         onRecordPick(){
+
             var record = this.recordList.find(function(item){ return String(item.RecordId) === String(this.set.recordid); }.bind(this));
+
             if(!record) return;
+
             this.set.rr = record.rr || '@';
+
             this.set.recordinfo = JSON.stringify({Line:record.Line, LineName:record.LineName, TTL:record.TTL});
+
             this.selectedRecordPreview = record.display || '';
+
         },
-        onInstancePick(){
-            var item = this.instanceOptions.find(function(x){ return x.key === this.selectedInstanceKey; }.bind(this));
-            if(!item) return;
-            this.set.aws_account_id = item.row.account_id;
-            this.set.aws_region = item.row.region;
-            this.set.aws_instance_id = item.row.instance_id;
-            if(!this.set.remark && item.row.name){ this.set.remark = item.row.name; }
-        },
+
         loadDomainRecords(silent){
+
             var that = this;
+
             if(!this.set.did){
+
                 if(!silent) layer.msg('??????', {icon:0, time:800});
+
                 return;
+
             }
+
             if(this.loadingRecords) return;
+
             this.loadingRecords = true;
+
+            if(!silent) layer.closeAll('loading');
+
             var ii = silent ? null : layer.load(2, {shade:[0.1,'#fff']});
+
             $.ajax({
-                type: 'POST', url: '/awssync/domain/records',
-                data: { did: this.set.did }, dataType: 'json', timeout: 120000,
+
+                type: 'POST',
+
+                url: '/awssync/domain/records',
+
+                data: { did: this.set.did },
+
+                dataType: 'json',
+
+                timeout: 120000,
+
                 success: function(res){
+
                     that.loadingRecords = false;
-                    if(ii) layer.close(ii);
+
+                    if(ii) layer.closeAll('loading');
+
                     if(res.code != 0){
+
                         if(!silent) layer.alert(res.msg, {icon:2});
+
                         return;
+
                     }
+
                     that.recordList = res.data || [];
+
                     if(that.recordList.length === 0){
-                        if(!silent) layer.msg('?????? A ?????? DNS ??', {icon:2, time:2500});
+
+                        if(!silent) layer.msg('?????? A ?????? DNS ????', {icon:2, time:2000});
+
                         return;
+
                     }
-                    if(that.set.recordid){ that.onRecordPick(); }
-                    else if(that.recordList.length === 1){
-                        that.set.recordid = that.recordList[0].RecordId;
+
+                    if(that.set.recordid){
+
                         that.onRecordPick();
+
+                    } else if(that.recordList.length === 1){
+
+                        that.set.recordid = that.recordList[0].RecordId;
+
+                        that.onRecordPick();
+
                     }
-                    if(!silent) layer.msg('??? '+that.recordList.length+' ? A ??', {icon:1, time:1000});
+
+                    if(!silent) layer.msg('??? '+that.recordList.length+' ? A ??', {icon:1, time:800});
+
                 },
+
                 error: function(xhr, textStatus){
+
                     that.loadingRecords = false;
-                    if(ii) layer.close(ii);
+
+                    if(ii) layer.closeAll('loading');
+
                     if(!silent){
+
                         var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : ('???? ' + (xhr.status || textStatus));
+
                         layer.alert(msg, {icon:2});
+
                     }
+
                 }
+
             });
+
         },
+
         loadAwsAccounts(silent){
+
             var that = this;
+
+            if(!silent) layer.closeAll('loading');
+
             var ii = silent ? null : layer.load(2, {shade:[0.1,'#fff']});
+
             $.ajax({
-                type: 'POST', url: '/awssync/accounts', dataType: 'json', timeout: 20000,
+
+                type: 'POST',
+
+                url: '/awssync/accounts',
+
+                dataType: 'json',
+
+                timeout: 20000,
+
                 success: function(res){
-                    if(ii) layer.close(ii);
+
+                    if(ii) layer.closeAll('loading');
+
                     if(res.code != 0){
+
                         if(!silent) layer.alert(res.msg, {icon:2});
-                        else document.getElementById('tokenHint').style.display = 'block';
+
                         return;
+
                     }
+
                     that.accountOptions = res.data || [];
+
                     if(that.selectedAccountId && that.accountOptions.some(function(a){ return a.id === that.selectedAccountId; })){
+
                         that.loadAwsInstances(true);
-                    } else if(that.accountOptions.length === 1){
+
+                    }else if(that.accountOptions.length === 1){
+
                         that.selectedAccountId = that.accountOptions[0].id;
+
                     }
+
                     if(!silent) layer.msg('??? '+that.accountOptions.length+' ???', {icon:1, time:800});
+
                 },
+
                 error: function(xhr, textStatus){
-                    if(ii) layer.close(ii);
-                    if(!silent) layer.alert((xhr.responseJSON && xhr.responseJSON.msg) || '??????', {icon:2});
-                    document.getElementById('tokenHint').style.display = 'block';
+
+                    if(ii) layer.closeAll('loading');
+
+                    if(!silent){
+
+                        var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : ('???? ' + (xhr.status || textStatus));
+
+                        layer.alert(msg, {icon:2});
+
+                    }
+
                 }
+
             });
+
         },
+
         loadAwsInstances(silent){
+
             var that = this;
+
             if(!this.selectedAccountId){
+
                 if(!silent) layer.msg('???? AWS ??', {icon:0});
+
                 return;
+
             }
+
+            if(!silent) layer.closeAll('loading');
+
             var ii = silent ? null : layer.load(2, {shade:[0.1,'#fff']});
+
             $.ajax({
-                type: 'POST', url: '/awssync/instances',
-                data: { account_id: this.selectedAccountId }, dataType: 'json', timeout: 60000,
+
+                type: 'POST',
+
+                url: '/awssync/instances',
+
+                data: { account_id: this.selectedAccountId },
+
+                dataType: 'json',
+
+                timeout: 60000,
+
                 success: function(res){
-                    if(ii) layer.close(ii);
+
+                    if(ii) layer.closeAll('loading');
+
                     if(res.code != 0){
+
                         if(!silent) layer.alert(res.msg, {icon:2});
+
                         return;
+
                     }
+
                     that.instanceOptions = (res.data || []).map(function(row){
+
                         return {
+
                             key: row.account_id + '|' + row.region + '|' + row.instance_id,
+
                             label: row.instance_id + ' | ' + row.region + ' | ' + (row.public_ip || '?IP') + ' | ' + (row.account_name || row.account_id),
+
                             row: row
+
                         };
+
                     });
+
                     if(that.set.aws_instance_id){
+
                         that.selectedInstanceKey = that.set.aws_account_id + '|' + that.set.aws_region + '|' + that.set.aws_instance_id;
+
                     }
+
                     if(!silent) layer.msg('??? '+that.instanceOptions.length+' ???', {icon:1, time:800});
+
                 },
-                error: function(xhr){
-                    if(ii) layer.close(ii);
-                    if(!silent) layer.alert((xhr.responseJSON && xhr.responseJSON.msg) || '??????', {icon:2});
+
+                error: function(xhr, textStatus){
+
+                    if(ii) layer.closeAll('loading');
+
+                    if(!silent){
+
+                        var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : ('???? ' + (xhr.status || textStatus));
+
+                        layer.alert(msg, {icon:2});
+
+                    }
+
                 }
+
             });
+
         },
+
+        onInstancePick(){
+
+            var item = this.instanceOptions.find(function(x){ return x.key === this.selectedInstanceKey; }.bind(this));
+
+            if(!item) return;
+
+            this.set.aws_account_id = item.row.account_id;
+
+            this.set.aws_region = item.row.region;
+
+            this.set.aws_instance_id = item.row.instance_id;
+
+            if(!this.set.remark && item.row.name){
+
+                this.set.remark = item.row.name;
+
+            }
+
+        },
+
         save(){
-            if(!this.set.did){ layer.msg('?????', {icon:2}); return; }
-            if(!this.set.recordid || !this.set.rr){ layer.msg('???????????????????', {icon:2}); return; }
+            if(!this.set.did){ layer.msg('??????', {icon:2}); return; }
+            if(!this.set.recordid || !this.set.rr){ layer.msg('????????????? A ??', {icon:2}); return; }
             if(!this.set.recordinfo){ this.onRecordPick(); }
-            if(!this.set.recordinfo){ layer.msg('???????????', {icon:2}); return; }
+            if(!this.set.recordinfo){ layer.msg('??????????????? A ??', {icon:2}); return; }
             if(!this.set.aws_account_id || !this.set.aws_region || !this.set.aws_instance_id){
-                layer.msg('??? AWS ????????????', {icon:2}); return;
+                layer.msg('???? AWS ???????? EC2 ??', {icon:2}); return;
             }
             var ii = layer.load(2, {shade:[0.1,'#fff']});
             $.ajax({
@@ -297,21 +650,22 @@ new Vue({
                 success: function(data) {
                     layer.close(ii);
                     if(data.code == 0){
-                        layer.alert(data.msg, {icon:1}, function(){
-                            window.location.href = '/awssync/task';
-                        });
+                        layer.alert(data.msg, {icon:1}, function(){ window.location.href = '/awssync/task'; });
                     } else {
                         layer.alert(data.msg, {icon:2});
                     }
                 },
                 error: function(xhr){
                     layer.close(ii);
-                    var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : '????????????? update.sh';
+                    var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : ('?????HTTP ' + (xhr.status || '') + '???????? update.sh');
                     layer.alert(msg, {icon:2});
                 }
             });
         }
     }
 });
+
 </script>
+
 {/block}
+
