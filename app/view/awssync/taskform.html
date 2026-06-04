@@ -148,19 +148,21 @@ new Vue({
     methods: {
         loadAwsInstances(silent){
             var that = this;
+            if(!silent) layer.closeAll('loading');
             var ii = silent ? null : layer.load(2, {shade:[0.1,'#fff']});
             $.ajax({
                 type: 'POST',
-                url: '/awssync/remote',
+                url: '/awssync/instances',
+                data: {},
                 dataType: 'json',
-                timeout: 120000,
+                timeout: 60000,
                 success: function(res){
-                    if(ii) layer.close(ii);
+                    if(ii) layer.closeAll('loading');
                     if(res.code != 0){
                         if(!silent) layer.alert(res.msg, {icon:2});
                         return;
                     }
-                    that.instanceOptions = (res.instances || []).map(function(row){
+                    that.instanceOptions = (res.data || []).map(function(row){
                         return {
                             key: row.account_id + '|' + row.region + '|' + row.instance_id,
                             label: row.instance_id + ' | ' + row.region + ' | ' + (row.public_ip || '无IP') + ' | ' + (row.account_name || row.account_id),
@@ -173,7 +175,7 @@ new Vue({
                     if(!silent) layer.msg('已加载 '+that.instanceOptions.length+' 台实例', {icon:1, time:800});
                 },
                 error: function(xhr, textStatus){
-                    if(ii) layer.close(ii);
+                    if(ii) layer.closeAll('loading');
                     if(!silent){
                         var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : ('读取失败 ' + (xhr.status || textStatus));
                         layer.alert(msg, {icon:2});

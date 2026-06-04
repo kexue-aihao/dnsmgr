@@ -81,7 +81,7 @@ class Awssync extends BaseController
                 }
                 $list = $aws->listInstancesByAccount($accountId, $accountName);
             } else {
-                $list = $aws->listAllInstances();
+                $list = $aws->listAllInstances(null, 40);
             }
             return json(['code' => 0, 'data' => $list, 'total' => count($list)]);
         } catch (Exception $e) {
@@ -93,18 +93,26 @@ class Awssync extends BaseController
     {
         if (!checkPermission(2)) return json(['code' => -1, 'msg' => '无权限']);
         if (function_exists('set_time_limit')) {
-            @set_time_limit(120);
+            @set_time_limit(90);
         }
         $withInstances = input('post.with_instances/d', 1) === 1;
         try {
             $aws = new AwsSbService();
             $accounts = $aws->getAccounts();
-            $instances = $withInstances ? $aws->listAllInstances() : [];
+            $instances = [];
+            $warn = '';
+            if ($withInstances) {
+                $instances = $aws->listAllInstances($accounts, 40);
+                if (empty($instances) && !empty($accounts)) {
+                    $warn = '已读取到账号但未发现 EC2 实例，请确认小助理上是否有运行中实例，或手动填写下方测试字段';
+                }
+            }
             return json([
                 'code' => 0,
                 'accounts' => $accounts,
                 'instances' => $instances,
                 'total' => count($instances),
+                'warn' => $warn,
             ]);
         } catch (Exception $e) {
             return json(['code' => -1, 'msg' => $e->getMessage()]);

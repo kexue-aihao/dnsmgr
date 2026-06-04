@@ -90,15 +90,20 @@ class AwsSbService
     /**
      * @throws Exception
      */
-    public function listAllInstances(): array
+    public function listAllInstances(?array $accounts = null, int $timeBudgetSec = 45): array
     {
-        $accounts = $this->getAccounts();
+        $accounts = $accounts ?? $this->getAccounts();
         if (empty($accounts)) {
             throw new Exception('未获取到任何 AWS 账号，请检查 Token 是否正确');
         }
+        $deadline = time() + max(5, $timeBudgetSec);
         $all = [];
         foreach ($accounts as $account) {
-            foreach ($this->listInstancesByAccount($account['id'], $account['name']) as $item) {
+            if (time() >= $deadline) {
+                break;
+            }
+            $remaining = max(3, $deadline - time());
+            foreach ($this->listInstancesByAccount($account['id'], $account['name'], $remaining) as $item) {
                 $all[$item['instance_id']] = $item;
             }
         }
@@ -108,23 +113,45 @@ class AwsSbService
     /**
      * @throws Exception
      */
-    public function listInstancesByAccount(string $accountId, ?string $accountName = null): array
+    public function listInstancesByAccount(string $accountId, ?string $accountName = null, int $timeBudgetSec = 30): array
     {
         $accountName = $accountName ?: $accountId;
         $result = [];
         $seen = [];
+        $deadline = time() + max(3, $timeBudgetSec);
 
-        $tryRegions = [''];
+        // 优先不带 region 拉取（通常最快）
         try {
-            foreach ($this->getRegions($accountId) as $region) {
-                $tryRegions[] = $region;
+            foreach ($this->fetchEc2Instances($accountId, '') as $row) {
+                $item = self::parseInstance($row, $accountId, $accountName, '');
+                if (!$item || isset($seen[$item['instance_id']])) {
+                    continue;
+                }
+                $seen[$item['instance_id']] = true;
+                $result[] = $item;
+            }
+            if (!empty($result)) {
+                return $result;
             }
         } catch (Exception $e) {
-            // 部分账号可能无法读取 regions，仍尝试不带 region 拉取
+            // 继续尝试按 region 拉取
         }
-        $tryRegions = array_values(array_unique($tryRegions));
+
+        $tryRegions = [];
+        try {
+            foreach ($this->getRegions($accountId) as $region) {
+                if ($region !== '') {
+                    $tryRegions[] = $region;
+                }
+            }
+        } catch (Exception $e) {
+            // 部分账号可能无法读取 regions
+        }
 
         foreach ($tryRegions as $region) {
+            if (time() >= $deadline) {
+                break;
+            }
             try {
                 $rows = $this->fetchEc2Instances($accountId, $region);
             } catch (Exception $e) {
@@ -177,7 +204,8 @@ class AwsSbService
     private function request(string $method, string $url, array $headers, $body = null): array
     {
         $options = [
-            'timeout' => 30,
+            'timeout' => 12,
+            'connect_timeout' => 5,
             'verify' => false,
             'http_errors' => false,
             'headers' => $headers,
@@ -190,7 +218,10 @@ class AwsSbService
             $client = new Client();
             $resp = $client->request($method, $url, $options);
         } catch (GuzzleException $e) {
-            throw new Exception('请求 AWS 小助理 API 失败：' . $e->getMessage());
+            $hint = str_contains($e->getMessage(), 'timed out') || str_contains($e->getMessage(), 'Timeout')
+                ? '（DNS 服务器访问 api.aws.sb 超时，请检查出站网络或 API 地址）'
+                : '';
+            throw new Exception('请求 AWS 小助理 API 失败：' . $e->getMessage() . $hint);
         }
 
         $raw = (string)$resp->getBody();
