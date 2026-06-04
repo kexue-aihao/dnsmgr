@@ -1,0 +1,125 @@
+{extend name="common/layout" /}
+{block name="title"}AWS IP同步设置{/block}
+{block name="main"}
+<div class="row">
+<div class="col-xs-12 col-md-6">
+<div class="panel panel-success">
+<div class="panel-heading"><h3 class="panel-title">功能简介</h3></div>
+<div class="panel-body">
+  <p>本功能用于在 <strong>AWS 小助理</strong> 更换 EC2 公网 IP 之后，由彩虹 DNS 自动读取实例当前 IP，并更新到指定子域名的 A 记录。</p>
+  <p>彩虹 DNS <strong>不会主动触发换 IP</strong>，只负责同步解析。换 IP 请在小助理面板操作。</p>
+</div>
+</div>
+<div class="panel panel-warning">
+<div class="panel-heading"><h3 class="panel-title">凭证说明</h3></div>
+<div class="panel-body">
+  <p>登录 <a href="https://aws.sb/" target="_blank" rel="noreferrer">aws.sb</a> 后，浏览器地址栏形如：</p>
+  <p><code>https://aws.sb/#/?token=xxxx</code></p>
+  <p>其中 <code>token=</code> 后面的字符串即为 <strong>X-Auth-Token</strong>。</p>
+  <p>账号 ID 为小助理实例卡片「账号」栏中 <code>+</code> 后面的字符串，例如 <code>d593a567bef661f2</code>。</p>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-md-6">
+<div class="panel panel-info">
+<div class="panel-heading"><h3 class="panel-title">API 设置</h3></div>
+<div class="panel-body">
+  <form onsubmit="return saveSetting(this)" method="post" class="form-horizontal" role="form">
+	<div class="form-group">
+	  <label class="col-sm-3 control-label">X-Auth-Token</label>
+	  <div class="col-sm-9"><input type="text" name="aws_sb_token" value="{:config_get('aws_sb_token', '')}" class="form-control" placeholder="登录 aws.sb 后 URL 中的 token"/></div>
+	</div>
+	<div class="form-group">
+	  <label class="col-sm-3 control-label">API 地址</label>
+	  <div class="col-sm-9"><input type="text" name="aws_sb_api_url" value="{:config_get('aws_sb_api_url', 'https://api.aws.sb')}" class="form-control"/></div>
+	</div>
+	<div class="form-group">
+	  <div class="col-sm-offset-3 col-sm-9">
+		<input type="submit" name="submit" value="保存" class="btn btn-primary btn-block"/>
+	  </div>
+	</div>
+  </form>
+</div>
+</div>
+<div class="panel panel-info">
+<div class="panel-heading"><h3 class="panel-title">连接测试</h3></div>
+<div class="panel-body">
+  <form onsubmit="return false" class="form-horizontal" role="form">
+	<div class="form-group">
+	  <label class="col-sm-3 control-label">Account ID</label>
+	  <div class="col-sm-9"><input type="text" id="test_account_id" class="form-control" placeholder="可留空，将使用第一条任务"/></div>
+	</div>
+	<div class="form-group">
+	  <label class="col-sm-3 control-label">Region</label>
+	  <div class="col-sm-9"><input type="text" id="test_region" class="form-control" placeholder="如 ap-southeast-1"/></div>
+	</div>
+	<div class="form-group">
+	  <label class="col-sm-3 control-label">Instance ID</label>
+	  <div class="col-sm-9"><input type="text" id="test_instance_id" class="form-control" placeholder="如 i-002e76f2b4375d51a"/></div>
+	</div>
+	<div class="form-group">
+	  <div class="col-sm-offset-3 col-sm-9">
+		<a href="javascript:testAws()" class="btn btn-default btn-block">测试读取实例 IP</a>
+	  </div>
+	</div>
+  </form>
+  <p class="help-block">需先保存 Token。若上方留空，将使用已添加的第一条同步任务进行测试。</p>
+  <p>自动同步依赖 <a href="/system/cronset">计划任务</a>，请确保已配置 cron 访问 URL 或 Shell 命令。</p>
+  <p>上次批量同步时间：{:config_get('aws_sync_time', '无')}</p>
+</div>
+</div>
+</div>
+</div>
+{/block}
+{block name="script"}
+<script src="/static/js/layer/layer.js"></script>
+<script>
+function saveSetting(obj){
+	var ii = layer.load(2, {shade:[0.1,'#fff']});
+	$.ajax({
+		type : 'POST',
+		url : '/awssync/set',
+		data : $(obj).serialize(),
+		dataType : 'json',
+		success : function(data) {
+			layer.close(ii);
+			if(data.code == 0){
+				layer.alert('保存成功！', {icon:1});
+			}else{
+				layer.alert(data.msg, {icon:2});
+			}
+		},
+		error:function(){
+			layer.close(ii);
+			layer.msg('服务器错误');
+		}
+	});
+	return false;
+}
+function testAws(){
+	var ii = layer.load(2, {shade:[0.1,'#fff']});
+	$.ajax({
+		type : 'POST',
+		url : '/awssync/test',
+		data : {
+			aws_account_id: $('#test_account_id').val(),
+			aws_region: $('#test_region').val(),
+			aws_instance_id: $('#test_instance_id').val()
+		},
+		dataType : 'json',
+		success : function(data) {
+			layer.close(ii);
+			if(data.code == 0){
+				layer.alert(data.msg, {icon:1});
+			}else{
+				layer.alert(data.msg, {icon:2});
+			}
+		},
+		error:function(){
+			layer.close(ii);
+			layer.msg('服务器错误');
+		}
+	});
+}
+</script>
+{/block}

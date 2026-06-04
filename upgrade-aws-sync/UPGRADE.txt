@@ -1,0 +1,11 @@
+﻿升级 AWS IP 同步功能
+
+1. 上传 app/service/AwsSbService.php
+2. 上传 app/service/AwsSyncService.php
+3. 上传 app/controller/Awssync.php
+4. 上传 app/view/awssync/ 整个目录
+5. 合并 route/app.php 中 awssync 相关路由（勿整文件覆盖）
+6. 合并 app/view/common/layout.html 侧栏菜单（勿整文件覆盖）
+7. 合并 app/controller/System.php 的 cron 方法，加入 AwsSyncService
+8. 执行 migrate-aws-sync.sql
+9. 清理 runtime/cache 并 chown www:www runtime

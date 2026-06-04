@@ -128,13 +128,6 @@ Route::group(function () {
     Route::post('/dmonitor/pool/data/:id', 'dmonitor/pool_data');
     Route::post('/dmonitor/pool/:action', 'dmonitor/pool_op');
 
-    Route::any('/awssync/set', 'awssync/set');
-    Route::post('/awssync/test', 'awssync/test');
-    Route::get('/awssync/task', 'awssync/task');
-    Route::post('/awssync/task/data', 'awssync/task_data');
-    Route::post('/awssync/task/:action', 'awssync/task_op');
-    Route::get('/awssync/task/:action', 'awssync/taskform');
-
     Route::any('/optimizeip/opipset', 'optimizeip/opipset');
     Route::post('/optimizeip/queryapi', 'optimizeip/queryapi');
     Route::post('/optimizeip/opiplist/data', 'optimizeip/opiplist_data');

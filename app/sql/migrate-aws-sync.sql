@@ -1,0 +1,28 @@
+-- AWS 小助理 IP 同步功能
+-- 表前缀 dnsmgr_ 请按实际安装前缀替换
+
+CREATE TABLE IF NOT EXISTS `dnsmgr_aws_sync` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `did` int(11) unsigned NOT NULL,
+  `rr` varchar(128) NOT NULL,
+  `recordid` varchar(60) NOT NULL,
+  `recordinfo` varchar(200) DEFAULT NULL,
+  `aws_account_id` varchar(64) NOT NULL DEFAULT '',
+  `aws_region` varchar(64) NOT NULL DEFAULT '',
+  `aws_instance_id` varchar(64) NOT NULL DEFAULT '',
+  `last_ip` varchar(128) DEFAULT NULL,
+  `last_dns_ip` varchar(128) DEFAULT NULL,
+  `frequency` int(11) NOT NULL DEFAULT 3,
+  `checktime` int(11) NOT NULL DEFAULT 0,
+  `checknexttime` int(11) NOT NULL DEFAULT 0,
+  `sync_count` int(11) NOT NULL DEFAULT 0,
+  `status` tinyint(1) NOT NULL DEFAULT 0,
+  `errmsg` varchar(500) DEFAULT NULL,
+  `remark` varchar(100) DEFAULT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `addtime` int(11) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `did` (`did`),
+  KEY `aws_instance_id` (`aws_instance_id`),
+  KEY `checknexttime` (`checknexttime`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

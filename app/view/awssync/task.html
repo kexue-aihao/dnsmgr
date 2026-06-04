@@ -1,0 +1,158 @@
+{extend name="common/layout" /}
+{block name="title"}AWS IP同步任务{/block}
+{block name="main"}
+<style>
+tbody tr>td:nth-child(2){overflow: hidden;text-overflow: ellipsis;white-space: nowrap;max-width:180px;}
+tbody tr>td:nth-child(3){overflow: hidden;text-overflow: ellipsis;white-space: nowrap;max-width:160px;}
+</style>
+<div class="row">
+	<div class="col-xs-12 center-block" style="float: none;">
+	<div class="panel panel-default panel-intro">
+	<div class="panel-body">
+
+<form onsubmit="return searchSubmit()" method="GET" class="form-inline" id="searchToolbar">
+  <div class="form-group">
+	<label>搜索</label>
+	<select name="type" class="form-control"><option value="1">域名/实例ID</option><option value="2">备注</option><option value="3">Account ID</option></select>
+  </div>
+  <div class="form-group">
+	<input type="text" class="form-control" name="kw" placeholder="">
+  </div>
+  <div class="form-group">
+	<select name="status" class="form-control"><option value="">同步状态</option><option value="1">成功</option><option value="2">失败</option><option value="0">待同步</option></select>
+  </div>
+  <button type="submit" class="btn btn-primary"><i class="fa fa-search"></i> 搜索</button>
+  <a href="javascript:searchClear()" class="btn btn-default"><i class="fa fa-refresh"></i> 刷新</a>
+  <a href="/awssync/task/add" class="btn btn-success"><i class="fa fa-plus"></i> 添加</a>
+  <div class="btn-group" role="group">
+	<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">批量操作 <span class="caret"></span></button>
+	<ul class="dropdown-menu"><li><a href="javascript:operation('open')">开启</a></li><li><a href="javascript:operation('close')">停止</a></li><li><a href="javascript:operation('run')">立即同步</a></li><li><a href="javascript:operation('delete')">删除</a></li></ul>
+  </div>
+</form>
+
+      <table id="listTable"></table>
+    </div>
+  </div>
+</div>
+</div>
+{/block}
+{block name="script"}
+<script src="/static/js/layer/layer.js"></script>
+<script src="/static/js/bootstrap-table-1.21.4.min.js"></script>
+<script src="/static/js/bootstrap-table-page-jump-to-1.21.4.min.js"></script>
+<script src="/static/js/custom.js?v=1006"></script>
+<script>
+$(document).ready(function(){
+	updateToolbar();
+	const pageSizeKey = 'awssync_pagesize';
+	const pageNumber = typeof window.$_GET['pageNumber'] != 'undefined' ? parseInt(window.$_GET['pageNumber']) : 1;
+	const pageSize = typeof getStoredPageSize === 'function' ? getStoredPageSize(pageSizeKey) : 15;
+	var urlSort = typeof window.$_GET['sortName'] != 'undefined' ? window.$_GET['sortName'] : undefined;
+	var urlOrder = typeof window.$_GET['sortOrder'] != 'undefined' ? window.$_GET['sortOrder'] : undefined;
+
+	$("#listTable").bootstrapTable({
+		url: '/awssync/task/data',
+		method: 'post',
+		pageNumber: pageNumber,
+		pageSize: pageSize,
+		classes: 'table table-striped table-hover table-bordered',
+		sortReset: false,
+		sortName: urlSort,
+		sortOrder: urlOrder,
+		columns: [
+			{field: '', checkbox: true},
+			{field: 'id', title: 'ID', sortable: true},
+			{
+				field: 'rr',
+				title: '域名',
+				sortable: true,
+				formatter: function(value, row) {
+					return value + '.' + row.domain;
+				}
+			},
+			{field: 'aws_instance_id', title: '实例 ID', sortable: true},
+			{field: 'aws_region', title: '区域'},
+			{field: 'last_ip', title: 'AWS IP', sortable: true},
+			{field: 'last_dns_ip', title: 'DNS IP'},
+			{field: 'frequency', title: '间隔(分)', sortable: true},
+			{
+				field: 'status',
+				title: '状态',
+				formatter: function(value, row) {
+					if(value == 1) return '<font color="green">成功</font>';
+					if(value == 2) return '<span title="'+row.errmsg+'" data-toggle="tooltip"><font color="red">失败</font></span>';
+					return '待同步';
+				}
+			},
+			{
+				field: 'active',
+				title: '开关',
+				sortable: true,
+				formatter: function(value, row) {
+					if(value == 1){
+						return '<div class="material-switch"><input id="active'+row.id+'" type="checkbox" checked onchange="setActive('+row.id+',0)"/><label for="active'+row.id+'" class="label-primary"></label></div>';
+					}
+					return '<div class="material-switch"><input id="active'+row.id+'" type="checkbox" onchange="setActive('+row.id+',1)"/><label for="active'+row.id+'" class="label-primary"></label></div>';
+				}
+			},
+			{field: 'checktimestr', title: '上次检查', sortable: true},
+			{field: 'sync_count', title: '同步次数', sortable: true},
+			{
+				field: '',
+				title: '操作',
+				formatter: function(value, row) {
+					return '<a href="/awssync/task/edit?id='+row.id+'" class="btn btn-info btn-xs">编辑</a>&nbsp;'
+						+ '<a href="javascript:runTask('+row.id+')" class="btn btn-success btn-xs">立即同步</a>&nbsp;'
+						+ '<a href="javascript:delTask('+row.id+')" class="btn btn-danger btn-xs">删除</a>';
+				}
+			}
+		],
+		onLoadSuccess: function(){
+			$('[data-toggle="tooltip"]').tooltip();
+		}
+	});
+});
+function setActive(id, active){
+	$.post('/awssync/task/setactive', {id:id, active:active}, function(data){
+		if(data.code != 0) layer.msg(data.msg, {icon:2});
+	});
+}
+function runTask(id){
+	var ii = layer.load(2, {shade:[0.1,'#fff']});
+	$.post('/awssync/task/run', {id:id}, function(data){
+		layer.close(ii);
+		if(data.code == 0){
+			layer.msg(data.msg, {icon:1, time:1500}, function(){ searchSubmit(); });
+		}else{
+			layer.alert(data.msg, {icon:2});
+		}
+	});
+}
+function delTask(id){
+	layer.confirm('确定删除此任务？', {icon:3, title:'提示'}, function(index){
+		layer.close(index);
+		$.post('/awssync/task/del', {id:id}, function(data){
+			if(data.code == 0){
+				layer.msg('删除成功', {icon:1, time:800}, function(){ searchSubmit(); });
+			}else{
+				layer.msg(data.msg, {icon:2});
+			}
+		});
+	});
+}
+function operation(action){
+	var rows = $("#listTable").bootstrapTable('getSelections');
+	if(rows.length == 0){ layer.msg('请选择任务', {time:800}); return; }
+	var ids = rows.map(function(r){ return r.id; });
+	var ii = layer.load(2, {shade:[0.1,'#fff']});
+	$.post('/awssync/task/batch', {batch_action:action, ids:ids}, function(data){
+		layer.close(ii);
+		if(data.code == 0){
+			layer.msg(data.msg, {icon:1, time:1200}, function(){ searchSubmit(); });
+		}else{
+			layer.alert(data.msg, {icon:2});
+		}
+	});
+}
+</script>
+{/block}

@@ -1,0 +1,200 @@
+{extend name="common/layout" /}
+{block name="title"}AWS IP同步任务{/block}
+{block name="main"}
+<style>
+    .control-label[is-required]:before {
+        content: "*";
+        color: #f56c6c;
+        margin-right: 4px;
+    }
+    .tips{color: #f6a838; padding-left: 5px;}
+</style>
+<div class="row" id="app">
+<div class="col-xs-12 center-block" style="float: none;">
+<div class="panel panel-default">
+<div class="panel-heading"><h3 class="panel-title"><a href="/awssync/task" class="btn btn-sm btn-default pull-right" style="margin-top:-6px"><i class="fa fa-reply fa-fw"></i> 返回</a>{if $action=='edit'}编辑{else}添加{/if} AWS IP同步任务</h3></div>
+<div class="panel-body">
+  <form onsubmit="return false" method="post" class="form-horizontal" role="form" id="taskform">
+    <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right" is-required>域名选择</label>
+        <div class="col-sm-6">
+            <div class="input-group">
+                <input type="text" name="rr" v-model="set.rr" placeholder="主机记录，如 1" class="form-control" required>
+                <span class="input-group-addon">.</span>
+                <select name="did" v-model="set.did" class="form-control" required>
+                    <option value="">--主域名--</option>
+                    <option v-for="option in domainList" :value="option.id">{{option.name}}</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right" is-required>解析记录</label>
+        <div class="col-sm-6"><div class="input-group">
+            <select name="recordid" v-model="set.recordid" class="form-control" required>
+                <option v-for="option in recordList" :value="option.RecordId">{{option.Value}} (线路:{{option.LineName}})</option>
+            </select>
+            <div class="input-group-btn">
+                <button type="button" @click="getRecordList" class="btn btn-info">点击获取</button>
+            </div>
+        </div></div>
+    </div>
+    <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right" is-required>AWS Account ID</label>
+        <div class="col-sm-6">
+            <input type="text" name="aws_account_id" v-model="set.aws_account_id" placeholder="小助理账号栏 + 后面，如 d593a567bef661f2" class="form-control" required>
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right" is-required>AWS Region</label>
+        <div class="col-sm-6">
+            <input type="text" name="aws_region" v-model="set.aws_region" placeholder="如 ap-southeast-1" class="form-control" required>
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right" is-required>EC2 Instance ID</label>
+        <div class="col-sm-6">
+            <input type="text" name="aws_instance_id" v-model="set.aws_instance_id" placeholder="如 i-002e76f2b4375d51a" class="form-control" required>
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right" is-required>同步间隔（分钟）</label>
+        <div class="col-sm-6">
+            <input type="number" name="frequency" v-model="set.frequency" min="1" max="1440" class="form-control" required>
+            <p class="help-block tips">计划任务触发后，按此间隔检查 AWS IP 是否与 DNS 一致。</p>
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right">备注</label>
+        <div class="col-sm-6">
+            <input type="text" name="remark" v-model="set.remark" placeholder="可留空，如 新加坡-1" class="form-control">
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="col-sm-offset-3 col-sm-6">
+            <input type="button" @click="save" value="保存" class="btn btn-primary">
+            <a href="/awssync/set" class="btn btn-default">API 设置</a>
+        </div>
+    </div>
+  </form>
+</div>
+</div>
+</div>
+</div>
+{/block}
+{block name="script"}
+<script src="/static/js/layer/layer.js"></script>
+<script src="/static/js/vue.min.js"></script>
+<script>
+var info = {$info|json_encode|raw};
+var domainList = {$domains|json_encode|raw};
+new Vue({
+    el: '#app',
+    data: {
+        action: '{$action}',
+        set: {
+            id: '',
+            remark: '',
+            rr: '',
+            did: '',
+            recordid: '',
+            recordinfo: '',
+            aws_account_id: '',
+            aws_region: 'ap-southeast-1',
+            aws_instance_id: '',
+            frequency: 3,
+        },
+        domainList: domainList,
+        recordList: [],
+    },
+    watch: {
+        'set.recordid': function(val){
+            if(val == '') return;
+            var record = this.recordList.find(item => item.RecordId == val);
+            if(record){
+                this.set.recordinfo = JSON.stringify({Line:record.Line, LineName:record.LineName, TTL:record.TTL});
+            }
+        }
+    },
+    mounted() {
+        if(this.action == 'edit' && info){
+            Object.keys(info).forEach((key) => {
+                this.$set(this.set, key, info[key])
+            })
+            if(this.set.recordinfo){
+                var recordinfo = JSON.parse(this.set.recordinfo);
+                this.recordList = [{RecordId:this.set.recordid, Value:this.set.last_dns_ip || this.set.last_ip || '', Line:recordinfo.Line, LineName:recordinfo.LineName, TTL:recordinfo.TTL}];
+            }
+        }
+    },
+    methods: {
+        getRecordList(){
+            var that = this;
+            if(this.set.did == ''){
+                layer.msg('请先选择域名', {time: 800});return;
+            }
+            if(this.set.rr == ''){
+                layer.msg('主机记录不能为空', {time: 800});return;
+            }
+            var ii = layer.load(2, {shade:[0.1,'#fff']});
+            $.ajax({
+                type : 'POST',
+                url : '/record/list',
+                data : {id:this.set.did, rr:this.set.rr},
+                dataType : 'json',
+                success : function(data) {
+                    layer.close(ii);
+                    if(data.code == 0){
+                        var list = data.data.filter(function(item){
+                            return item.Type == 'A';
+                        });
+                        if(list.length == 0){
+                            layer.msg('未找到 A 记录，请先在 DNS 添加', {icon:2});
+                            return;
+                        }
+                        layer.msg('成功获取到'+list.length+'条 A 记录', {icon:1, time:800});
+                        that.recordList = list;
+                        if(!that.set.recordid && list.length > 0){
+                            that.set.recordid = list[0].RecordId;
+                        }
+                    }else{
+                        layer.msg(data.msg, {icon:2});
+                    }
+                },
+                error:function(){
+                    layer.close(ii);
+                    layer.msg('服务器错误');
+                }
+            });
+        },
+        save(){
+            var that = this;
+            if(!this.set.recordinfo){
+                layer.msg('请先获取并选择解析记录', {icon:2}); return;
+            }
+            var ii = layer.load(2, {shade:[0.1,'#fff']});
+            $.ajax({
+                type : 'POST',
+                url : '/awssync/task/' + this.action,
+                data : this.set,
+                dataType : 'json',
+                success : function(data) {
+                    layer.close(ii);
+                    if(data.code == 0){
+                        layer.msg(data.msg, {icon:1, time:1000}, function(){
+                            window.location.href = '/awssync/task';
+                        });
+                    }else{
+                        layer.alert(data.msg, {icon:2});
+                    }
+                },
+                error:function(){
+                    layer.close(ii);
+                    layer.msg('服务器错误');
+                }
+            });
+        }
+    }
+});
+</script>
+{/block}

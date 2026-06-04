@@ -154,6 +154,7 @@ class System extends BaseController
         if ($key != $cron_key) exit('访问密钥错误');
 
         (new ScheduleService())->execute();
+        (new \app\service\AwsSyncService())->execute();
         $res = (new OptimizeService())->execute();
         if (!$res) {
             (new CertTaskService())->execute();
