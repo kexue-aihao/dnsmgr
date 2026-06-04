@@ -14,7 +14,10 @@ insert_after_domains = '''  {/if}
   <form onsubmit'''
 
 if 'tokenHint' not in text:
-    text = text.replace('  {/if}\n  <form onsubmit', insert_after_domains, 1)
+    if '  {/if}\n\n  <form onsubmit' in text:
+        text = text.replace('  {/if}\n\n  <form onsubmit', insert_after_domains, 1)
+    else:
+        text = text.replace('  {/if}\n  <form onsubmit', insert_after_domains, 1)
 
 for a, b in [
     ('is-required>选择域名', 'is-required>① 选择域名'),
