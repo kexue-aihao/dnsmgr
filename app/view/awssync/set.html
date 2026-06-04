@@ -44,8 +44,14 @@
 <div class="panel panel-info">
 <div class="panel-heading"><h3 class="panel-title">账号与实例列表</h3></div>
 <div class="panel-body">
-  <p class="help-block">保存 Token 后点击刷新，从小助理 API 读取当前账号及 EC2 实例。</p>
-  <a href="javascript:loadRemoteList()" class="btn btn-info btn-block">刷新账号与实例列表</a>
+  <p class="help-block">保存 Token 后：先读取账号列表，选择账号，再读取该账号下的 EC2 实例。</p>
+  <a href="javascript:loadAccounts()" class="btn btn-info btn-block">① 读取账号列表</a>
+  <div class="form-group" style="margin-top:12px;margin-bottom:8px;">
+    <select id="remote_account_pick" class="form-control" disabled>
+      <option value="">-- 请先读取账号列表 --</option>
+    </select>
+  </div>
+  <a href="javascript:loadInstancesForAccount()" id="btnLoadInstances" class="btn btn-success btn-block disabled" style="pointer-events:none;opacity:0.65;">② 读取该账号的 EC2 实例</a>
   <div id="remoteSummary" style="margin-top:10px;color:#666;"></div>
   <div class="table-responsive" style="margin-top:10px;max-height:360px;overflow:auto;">
     <table class="table table-bordered table-striped" id="remoteTable" style="display:none;">
@@ -114,7 +120,7 @@ function saveSetting(obj){
 		timeout: 30000,
 		success : function(data) {
 			if(data.code == 0){
-				layer.msg('保存成功，请点击下方「刷新账号与实例列表」', {icon:1, time:2500});
+				layer.msg('保存成功，请点击「① 读取账号列表」', {icon:1, time:2500});
 			}else{
 				layer.alert(data.msg, {icon:2});
 			}
@@ -129,8 +135,30 @@ function saveSetting(obj){
 	return false;
 }
 var remoteInstances = [];
+var remoteAccounts = [];
 function closeLoading(){
     if (typeof layer !== 'undefined') layer.closeAll('loading');
+}
+function setInstanceBtnEnabled(enabled){
+    var $btn = $('#btnLoadInstances');
+    if(enabled){
+        $btn.removeClass('disabled').css({opacity:1, pointerEvents:'auto'});
+    }else{
+        $btn.addClass('disabled').css({opacity:0.65, pointerEvents:'none'});
+    }
+}
+function renderAccountOptions(accounts){
+    remoteAccounts = accounts || [];
+    var opts = '<option value="">-- 请选择 AWS 账号 --</option>';
+    remoteAccounts.forEach(function(acc){
+        opts += '<option value="'+ acc.id +'">'+ (acc.name || acc.id) +' ('+ acc.id +')</option>';
+    });
+    $('#remote_account_pick').html(opts).prop('disabled', remoteAccounts.length === 0);
+    setInstanceBtnEnabled(false);
+    if(remoteAccounts.length === 1){
+        $('#remote_account_pick').val(remoteAccounts[0].id);
+        setInstanceBtnEnabled(true);
+    }
 }
 function showAjaxError(xhr, textStatus){
     var msg = '请求失败';
@@ -149,9 +177,16 @@ function showAjaxError(xhr, textStatus){
     }
     layer.alert(msg, {icon: 2});
 }
-function renderRemoteList(accounts, instances){
+function renderRemoteList(accounts, instances, accountLabel){
     remoteInstances = instances || [];
-    $('#remoteSummary').html('共 <b>'+(accounts ? accounts.length : 0)+'</b> 个账号，<b>'+remoteInstances.length+'</b> 台 EC2 实例');
+    var accCount = accounts ? accounts.length : remoteAccounts.length;
+    var summary = '共 <b>'+ accCount +'</b> 个账号';
+    if(accountLabel){
+        summary += '，当前账号 <b>'+ accountLabel +'</b> 下 <b>'+ remoteInstances.length +'</b> 台 EC2 实例';
+    }else{
+        summary += '，<b>'+ remoteInstances.length +'</b> 台 EC2 实例';
+    }
+    $('#remoteSummary').html(summary);
     var html = '';
     remoteInstances.forEach(function(row){
         html += '<tr>'
@@ -170,55 +205,33 @@ function renderRemoteList(accounts, instances){
     });
     $('#test_instance_pick').html(opts);
 }
-function loadRemoteList(){
+function loadAccounts(){
     closeLoading();
     layer.load(2, {shade:[0.1,'#fff']});
     $('#remoteSummary').html('正在连接 AWS 小助理，读取账号...');
+    remoteInstances = [];
+    $('#remoteTable').hide();
+    $('#test_instance_pick').html('<option value="">-- 请先选择账号并读取实例 --</option>');
 
     $.ajax({
         type: 'POST',
-        url: '/awssync/remote',
-        data: { with_instances: 0 },
+        url: '/awssync/accounts',
         dataType: 'json',
         timeout: 20000,
         success: function(res){
+            closeLoading();
             if(res.code != 0){
-                closeLoading();
                 layer.alert(res.msg || '读取账号失败', {icon:2});
                 return;
             }
-            var accounts = res.accounts || [];
+            var accounts = res.data || [];
             if(accounts.length === 0){
-                closeLoading();
                 layer.alert('未读取到任何 AWS 账号，请检查 Token 是否正确', {icon:2});
                 return;
             }
-            $('#remoteSummary').html('已读取 <b>'+accounts.length+'</b> 个账号，正在读取 EC2 实例（约需 10～40 秒）...');
-
-            $.ajax({
-                type: 'POST',
-                url: '/awssync/instances',
-                data: {},
-                dataType: 'json',
-                timeout: 60000,
-                success: function(res2){
-                    closeLoading();
-                    if(res2.code != 0){
-                        renderRemoteList(accounts, []);
-                        layer.alert(res2.msg || '读取实例失败，可手动填写下方测试字段', {icon:2});
-                        return;
-                    }
-                    renderRemoteList(accounts, res2.data || []);
-                    if((res2.data || []).length === 0){
-                        layer.msg('已连接小助理，但未发现 EC2 实例，可手动填写下方字段', {icon:0, time:3500});
-                    }
-                },
-                error: function(xhr, textStatus){
-                    closeLoading();
-                    renderRemoteList(accounts, []);
-                    showAjaxError(xhr, textStatus);
-                }
-            });
+            renderAccountOptions(accounts);
+            renderRemoteList(accounts, [], '');
+            layer.msg('已读取 '+accounts.length+' 个账号，请选择账号后点击「② 读取实例」', {icon:1, time:2500});
         },
         error: function(xhr, textStatus){
             closeLoading();
@@ -226,6 +239,47 @@ function loadRemoteList(){
         }
     });
 }
+function loadInstancesForAccount(){
+    var accountId = $('#remote_account_pick').val();
+    if(!accountId){
+        layer.msg('请先选择 AWS 账号', {icon:0});
+        return;
+    }
+    var accountLabel = $('#remote_account_pick option:selected').text();
+    closeLoading();
+    layer.load(2, {shade:[0.1,'#fff']});
+    $('#remoteSummary').html('正在读取账号 <b>'+ accountLabel +'</b> 下的 EC2 实例...');
+
+    $.ajax({
+        type: 'POST',
+        url: '/awssync/instances',
+        data: { account_id: accountId },
+        dataType: 'json',
+        timeout: 60000,
+        success: function(res){
+            closeLoading();
+            if(res.code != 0){
+                layer.alert(res.msg || '读取实例失败', {icon:2});
+                renderRemoteList(remoteAccounts, [], accountLabel);
+                return;
+            }
+            var list = res.data || [];
+            renderRemoteList(remoteAccounts, list, accountLabel);
+            if(list.length === 0){
+                layer.msg('该账号下未发现 EC2 实例，可手动填写下方测试字段', {icon:0, time:3500});
+            }else{
+                layer.msg('已读取 '+list.length+' 台实例', {icon:1, time:1500});
+            }
+        },
+        error: function(xhr, textStatus){
+            closeLoading();
+            showAjaxError(xhr, textStatus);
+        }
+    });
+}
+$('#remote_account_pick').on('change', function(){
+    setInstanceBtnEnabled($(this).val() !== '');
+});
 $('#test_instance_pick').on('change', function(){
 	var idx = $(this).val();
 	if(idx === '') return;

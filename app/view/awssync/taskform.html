@@ -40,18 +40,32 @@
         </div></div>
     </div>
     <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right" is-required>AWS 账号</label>
+        <div class="col-sm-6">
+            <div class="input-group">
+                <select v-model="selectedAccountId" class="form-control">
+                    <option value="">-- 请先读取账号列表 --</option>
+                    <option v-for="acc in accountOptions" :value="acc.id">{{acc.name}} ({{acc.id}})</option>
+                </select>
+                <span class="input-group-btn">
+                    <button type="button" @click="loadAwsAccounts" class="btn btn-default">读取账号</button>
+                </span>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
         <label class="col-sm-3 control-label no-padding-right" is-required>AWS 实例选择</label>
         <div class="col-sm-6">
             <div class="input-group">
                 <select v-model="selectedInstanceKey" @change="onInstancePick" class="form-control">
-                    <option value="">-- 请先刷新实例列表 --</option>
+                    <option value="">-- 请先选择账号并读取实例 --</option>
                     <option v-for="item in instanceOptions" :value="item.key">{{item.label}}</option>
                 </select>
                 <span class="input-group-btn">
-                    <button type="button" @click="loadAwsInstances" class="btn btn-info">刷新实例</button>
+                    <button type="button" @click="loadAwsInstances" class="btn btn-info" :disabled="!selectedAccountId">读取实例</button>
                 </span>
             </div>
-            <p class="help-block tips">需先在 <a href="/awssync/set">API 设置</a> 保存 Token。选中后自动填充账号/区域/实例 ID。</p>
+            <p class="help-block tips">需先在 <a href="/awssync/set">API 设置</a> 保存 Token。先选账号，再读该账号下的实例。</p>
         </div>
     </div>
     <div class="form-group">
@@ -121,6 +135,8 @@ new Vue({
         },
         domainList: domainList,
         recordList: [],
+        accountOptions: [],
+        selectedAccountId: '',
         instanceOptions: [],
         selectedInstanceKey: '',
     },
@@ -142,18 +158,57 @@ new Vue({
                 var recordinfo = JSON.parse(this.set.recordinfo);
                 this.recordList = [{RecordId:this.set.recordid, Value:this.set.last_dns_ip || this.set.last_ip || '', Line:recordinfo.Line, LineName:recordinfo.LineName, TTL:recordinfo.TTL}];
             }
+            if(this.set.aws_account_id){
+                this.selectedAccountId = this.set.aws_account_id;
+            }
         }
-        this.loadAwsInstances(true);
+        this.loadAwsAccounts(true);
     },
     methods: {
-        loadAwsInstances(silent){
+        loadAwsAccounts(silent){
             var that = this;
             if(!silent) layer.closeAll('loading');
             var ii = silent ? null : layer.load(2, {shade:[0.1,'#fff']});
             $.ajax({
                 type: 'POST',
+                url: '/awssync/accounts',
+                dataType: 'json',
+                timeout: 20000,
+                success: function(res){
+                    if(ii) layer.closeAll('loading');
+                    if(res.code != 0){
+                        if(!silent) layer.alert(res.msg, {icon:2});
+                        return;
+                    }
+                    that.accountOptions = res.data || [];
+                    if(that.selectedAccountId && that.accountOptions.some(function(a){ return a.id === that.selectedAccountId; })){
+                        that.loadAwsInstances(true);
+                    }else if(that.accountOptions.length === 1){
+                        that.selectedAccountId = that.accountOptions[0].id;
+                    }
+                    if(!silent) layer.msg('已读取 '+that.accountOptions.length+' 个账号', {icon:1, time:800});
+                },
+                error: function(xhr, textStatus){
+                    if(ii) layer.closeAll('loading');
+                    if(!silent){
+                        var msg = (xhr.responseJSON && xhr.responseJSON.msg) ? xhr.responseJSON.msg : ('读取失败 ' + (xhr.status || textStatus));
+                        layer.alert(msg, {icon:2});
+                    }
+                }
+            });
+        },
+        loadAwsInstances(silent){
+            var that = this;
+            if(!this.selectedAccountId){
+                if(!silent) layer.msg('请先选择 AWS 账号', {icon:0});
+                return;
+            }
+            if(!silent) layer.closeAll('loading');
+            var ii = silent ? null : layer.load(2, {shade:[0.1,'#fff']});
+            $.ajax({
+                type: 'POST',
                 url: '/awssync/instances',
-                data: {},
+                data: { account_id: this.selectedAccountId },
                 dataType: 'json',
                 timeout: 60000,
                 success: function(res){
