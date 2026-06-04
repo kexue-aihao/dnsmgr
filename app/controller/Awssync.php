@@ -54,6 +54,41 @@ class Awssync extends BaseController
         }
     }
 
+    public function accounts()
+    {
+        if (!checkPermission(2)) return json(['code' => -1, 'msg' => '无权限']);
+        try {
+            $list = (new AwsSbService())->getAccounts();
+            return json(['code' => 0, 'data' => $list, 'total' => count($list)]);
+        } catch (Exception $e) {
+            return json(['code' => -1, 'msg' => $e->getMessage()]);
+        }
+    }
+
+    public function instances()
+    {
+        if (!checkPermission(2)) return json(['code' => -1, 'msg' => '无权限']);
+        $accountId = input('post.account_id', null, 'trim');
+        try {
+            $aws = new AwsSbService();
+            if ($accountId !== '') {
+                $accountName = $accountId;
+                foreach ($aws->getAccounts() as $account) {
+                    if ($account['id'] === $accountId) {
+                        $accountName = $account['name'];
+                        break;
+                    }
+                }
+                $list = $aws->listInstancesByAccount($accountId, $accountName);
+            } else {
+                $list = $aws->listAllInstances();
+            }
+            return json(['code' => 0, 'data' => $list, 'total' => count($list)]);
+        } catch (Exception $e) {
+            return json(['code' => -1, 'msg' => $e->getMessage()]);
+        }
+    }
+
     public function task()
     {
         if (!checkPermission(2)) return $this->alert('error', '无权限');

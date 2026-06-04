@@ -189,6 +189,10 @@ run_composer() {
   if [[ ! -f "$SITE_DIR/composer.json" ]]; then
     return 0
   fi
+  if [[ -f "$SITE_DIR/vendor/autoload.php" && "${DNSMGR_FORCE_COMPOSER:-0}" != "1" ]]; then
+    ok "vendor 已存在，跳过 composer（强制更新请设 DNSMGR_FORCE_COMPOSER=1）"
+    return 0
+  fi
   if ! command -v composer >/dev/null 2>&1; then
     warn "未安装 composer，跳过依赖更新（若 vendor 已存在通常无影响）"
     return 0
@@ -198,8 +202,11 @@ run_composer() {
     return 0
   fi
   log "执行 composer install --no-dev ..."
-  (cd "$SITE_DIR" && composer install --no-dev --no-interaction --prefer-dist)
-  ok "composer 依赖更新完成"
+  if (cd "$SITE_DIR" && composer install --no-dev --no-interaction --prefer-dist 2>&1); then
+    ok "composer 依赖更新完成"
+  else
+    warn "composer 失败（常见：PHP 版本低于 8.2 或缺少 ssh2 扩展）。站点若原本正常可忽略"
+  fi
 }
 
 main() {

@@ -130,6 +130,8 @@ Route::group(function () {
 
     Route::any('/awssync/set', 'awssync/set');
     Route::post('/awssync/test', 'awssync/test');
+    Route::post('/awssync/accounts', 'awssync/accounts');
+    Route::post('/awssync/instances', 'awssync/instances');
     Route::get('/awssync/task', 'awssync/task');
     Route::post('/awssync/task/data', 'awssync/task_data');
     Route::post('/awssync/task/:action', 'awssync/task_op');

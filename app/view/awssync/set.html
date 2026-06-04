@@ -16,7 +16,7 @@
   <p>登录 <a href="https://aws.sb/" target="_blank" rel="noreferrer">aws.sb</a> 后，浏览器地址栏形如：</p>
   <p><code>https://aws.sb/#/?token=xxxx</code></p>
   <p>其中 <code>token=</code> 后面的字符串即为 <strong>X-Auth-Token</strong>。</p>
-  <p>账号 ID 为小助理实例卡片「账号」栏中 <code>+</code> 后面的字符串，例如 <code>d593a567bef661f2</code>。</p>
+  <p>保存 Token 后，可在下方<strong>自动读取小助理上的账号与 EC2 实例</strong>，添加同步任务时直接下拉选择，无需手填 ID。</p>
 </div>
 </div>
 </div>
@@ -42,9 +42,39 @@
 </div>
 </div>
 <div class="panel panel-info">
+<div class="panel-heading"><h3 class="panel-title">账号与实例列表</h3></div>
+<div class="panel-body">
+  <p class="help-block">保存 Token 后点击刷新，从小助理 API 读取当前账号及 EC2 实例。</p>
+  <a href="javascript:loadRemoteList()" class="btn btn-info btn-block">刷新账号与实例列表</a>
+  <div id="remoteSummary" style="margin-top:10px;color:#666;"></div>
+  <div class="table-responsive" style="margin-top:10px;max-height:360px;overflow:auto;">
+    <table class="table table-bordered table-striped" id="remoteTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>账号</th>
+          <th>区域</th>
+          <th>实例 ID</th>
+          <th>名称</th>
+          <th>公网 IP</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+</div>
+<div class="panel panel-info">
 <div class="panel-heading"><h3 class="panel-title">连接测试</h3></div>
 <div class="panel-body">
   <form onsubmit="return false" class="form-horizontal" role="form">
+	<div class="form-group">
+	  <label class="col-sm-3 control-label">选择实例</label>
+	  <div class="col-sm-9">
+	    <select id="test_instance_pick" class="form-control">
+	      <option value="">-- 请先刷新上方列表，或手动填写下方字段 --</option>
+	    </select>
+	  </div>
+	</div>
 	<div class="form-group">
 	  <label class="col-sm-3 control-label">Account ID</label>
 	  <div class="col-sm-9"><input type="text" id="test_account_id" class="form-control" placeholder="可留空，将使用第一条任务"/></div>
@@ -84,7 +114,9 @@ function saveSetting(obj){
 		success : function(data) {
 			layer.close(ii);
 			if(data.code == 0){
-				layer.alert('保存成功！', {icon:1});
+				layer.alert('保存成功！', {icon:1}, function(){
+					loadRemoteList();
+				});
 			}else{
 				layer.alert(data.msg, {icon:2});
 			}
@@ -96,6 +128,57 @@ function saveSetting(obj){
 	});
 	return false;
 }
+var remoteInstances = [];
+function loadRemoteList(){
+	var ii = layer.load(2, {shade:[0.1,'#fff']});
+	$.when(
+		$.post('/awssync/accounts', {}, null, 'json'),
+		$.post('/awssync/instances', {}, null, 'json')
+	).done(function(accRes, instRes){
+		layer.close(ii);
+		var accounts = (accRes[0] && accRes[0].code == 0) ? accRes[0].data : [];
+		var instances = (instRes[0] && instRes[0].code == 0) ? instRes[0].data : [];
+		if((!accRes[0] || accRes[0].code != 0) && accRes[0]){
+			layer.alert(accRes[0].msg || '读取账号失败', {icon:2});
+			return;
+		}
+		if((!instRes[0] || instRes[0].code != 0) && instRes[0]){
+			layer.alert(instRes[0].msg || '读取实例失败', {icon:2});
+			return;
+		}
+		remoteInstances = instances;
+		$('#remoteSummary').html('共 <b>'+accounts.length+'</b> 个账号，<b>'+instances.length+'</b> 台 EC2 实例');
+		var html = '';
+		instances.forEach(function(row){
+			html += '<tr>'
+				+ '<td>'+ (row.account_name || row.account_id) +'</td>'
+				+ '<td>'+ row.region +'</td>'
+				+ '<td>'+ row.instance_id +'</td>'
+				+ '<td>'+ (row.name || '-') +'</td>'
+				+ '<td>'+ (row.public_ip || '-') +'</td>'
+				+ '</tr>';
+		});
+		$('#remoteTable tbody').html(html);
+		$('#remoteTable').toggle(instances.length > 0);
+		var opts = '<option value="">-- 选择实例进行连接测试 --</option>';
+		instances.forEach(function(row, idx){
+			opts += '<option value="'+idx+'">'+ row.instance_id +' | '+ row.region +' | '+ (row.public_ip || '无IP') +' | '+ (row.account_name || row.account_id) +'</option>';
+		});
+		$('#test_instance_pick').html(opts);
+	}).fail(function(){
+		layer.close(ii);
+		layer.msg('服务器错误');
+	});
+}
+$('#test_instance_pick').on('change', function(){
+	var idx = $(this).val();
+	if(idx === '') return;
+	var row = remoteInstances[idx];
+	if(!row) return;
+	$('#test_account_id').val(row.account_id);
+	$('#test_region').val(row.region);
+	$('#test_instance_id').val(row.instance_id);
+});
 function testAws(){
 	var ii = layer.load(2, {shade:[0.1,'#fff']});
 	$.ajax({

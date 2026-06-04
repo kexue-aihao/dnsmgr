@@ -40,21 +40,36 @@
         </div></div>
     </div>
     <div class="form-group">
+        <label class="col-sm-3 control-label no-padding-right" is-required>AWS 实例选择</label>
+        <div class="col-sm-6">
+            <div class="input-group">
+                <select v-model="selectedInstanceKey" @change="onInstancePick" class="form-control">
+                    <option value="">-- 请先刷新实例列表 --</option>
+                    <option v-for="item in instanceOptions" :value="item.key">{{item.label}}</option>
+                </select>
+                <span class="input-group-btn">
+                    <button type="button" @click="loadAwsInstances" class="btn btn-info">刷新实例</button>
+                </span>
+            </div>
+            <p class="help-block tips">需先在 <a href="/awssync/set">API 设置</a> 保存 Token。选中后自动填充账号/区域/实例 ID。</p>
+        </div>
+    </div>
+    <div class="form-group">
         <label class="col-sm-3 control-label no-padding-right" is-required>AWS Account ID</label>
         <div class="col-sm-6">
-            <input type="text" name="aws_account_id" v-model="set.aws_account_id" placeholder="小助理账号栏 + 后面，如 d593a567bef661f2" class="form-control" required>
+            <input type="text" name="aws_account_id" v-model="set.aws_account_id" placeholder="选择实例后自动填充" class="form-control" required readonly>
         </div>
     </div>
     <div class="form-group">
         <label class="col-sm-3 control-label no-padding-right" is-required>AWS Region</label>
         <div class="col-sm-6">
-            <input type="text" name="aws_region" v-model="set.aws_region" placeholder="如 ap-southeast-1" class="form-control" required>
+            <input type="text" name="aws_region" v-model="set.aws_region" placeholder="选择实例后自动填充" class="form-control" required readonly>
         </div>
     </div>
     <div class="form-group">
         <label class="col-sm-3 control-label no-padding-right" is-required>EC2 Instance ID</label>
         <div class="col-sm-6">
-            <input type="text" name="aws_instance_id" v-model="set.aws_instance_id" placeholder="如 i-002e76f2b4375d51a" class="form-control" required>
+            <input type="text" name="aws_instance_id" v-model="set.aws_instance_id" placeholder="选择实例后自动填充" class="form-control" required readonly>
         </div>
     </div>
     <div class="form-group">
@@ -106,6 +121,8 @@ new Vue({
         },
         domainList: domainList,
         recordList: [],
+        instanceOptions: [],
+        selectedInstanceKey: '',
     },
     watch: {
         'set.recordid': function(val){
@@ -126,8 +143,44 @@ new Vue({
                 this.recordList = [{RecordId:this.set.recordid, Value:this.set.last_dns_ip || this.set.last_ip || '', Line:recordinfo.Line, LineName:recordinfo.LineName, TTL:recordinfo.TTL}];
             }
         }
+        this.loadAwsInstances(true);
     },
     methods: {
+        loadAwsInstances(silent){
+            var that = this;
+            var ii = silent ? null : layer.load(2, {shade:[0.1,'#fff']});
+            $.post('/awssync/instances', {}, function(res){
+                if(ii) layer.close(ii);
+                if(res.code != 0){
+                    if(!silent) layer.alert(res.msg, {icon:2});
+                    return;
+                }
+                that.instanceOptions = (res.data || []).map(function(row){
+                    return {
+                        key: row.account_id + '|' + row.region + '|' + row.instance_id,
+                        label: row.instance_id + ' | ' + row.region + ' | ' + (row.public_ip || '无IP') + ' | ' + (row.account_name || row.account_id),
+                        row: row
+                    };
+                });
+                if(that.set.aws_instance_id){
+                    that.selectedInstanceKey = that.set.aws_account_id + '|' + that.set.aws_region + '|' + that.set.aws_instance_id;
+                }
+                if(!silent) layer.msg('已加载 '+that.instanceOptions.length+' 台实例', {icon:1, time:800});
+            }, 'json').fail(function(){
+                if(ii) layer.close(ii);
+                if(!silent) layer.msg('服务器错误');
+            });
+        },
+        onInstancePick(){
+            var item = this.instanceOptions.find(function(x){ return x.key === this.selectedInstanceKey; }.bind(this));
+            if(!item) return;
+            this.set.aws_account_id = item.row.account_id;
+            this.set.aws_region = item.row.region;
+            this.set.aws_instance_id = item.row.instance_id;
+            if(!this.set.remark && item.row.name){
+                this.set.remark = item.row.name;
+            }
+        },
         getRecordList(){
             var that = this;
             if(this.set.did == ''){
