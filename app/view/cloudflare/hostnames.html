@@ -458,14 +458,20 @@
 <script src="/static/js/bootstrapValidator.min.js"></script>
 <script src="/static/js/select2-4.0.13.min.js"></script>
 <script src="/static/js/select2-i18n-zh-CN-4.0.13.min.js"></script>
-<script src="/static/js/custom.js?v=1006"></script>
+<script src="/static/js/custom.js?v=1007"></script>
 <script>
 var currentVerificationHostnameId = '';
 var allHostnameData = []; // 保存完整的原始数据用于客户端搜索
 var domainId = '{$domainId}'; // 域名 ID
 
 $(document).ready(function(){
-  $("#form-store").bootstrapValidator();
+	if (typeof $.fn.bootstrapTable === 'undefined') {
+		layer.alert('表格组件未加载，请 Ctrl+F5 强刷页面；若仍失败请检查 /static/js/bootstrap-table-1.21.4.min.js 是否可访问', {icon:2});
+		return;
+	}
+  if ($.fn.bootstrapValidator) {
+    $("#form-store").bootstrapValidator();
+  }
   loadFallbackOrigin();
   loadDcvDelegationUuid();
   const pageSizeKey = 'hostnames_pagesize';
@@ -1631,6 +1637,10 @@ function resetCfOptimizedState(){
 }
 
 $(document).ready(function(){
+	if (typeof $.fn.bootstrapTable === 'undefined') {
+		layer.alert('表格组件未加载，请 Ctrl+F5 强刷页面；若仍失败请检查 /static/js/bootstrap-table-1.21.4.min.js 是否可访问', {icon:2});
+		return;
+	}
   $('#modal-cf-optimized').on('hidden.bs.modal', function(){
     resetCfOptimizedState();
   });

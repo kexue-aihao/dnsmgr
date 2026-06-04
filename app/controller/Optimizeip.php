@@ -40,35 +40,42 @@ class Optimizeip extends BaseController
     public function opiplist_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
-        $type = input('post.type/d', 1);
-        $kw = input('post.kw', null, 'trim');
-        $status = input('post.status', null);
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        $select = Db::name('optimizeip')->alias('A')->join('domain B', 'A.did = B.id');
-        if (!empty($kw)) {
-            if ($type == 1) {
-                $select->whereLike('rr|B.name', '%' . $kw . '%');
-            } elseif ($type == 2) {
-                $select->whereLike('remark', '%' . $kw . '%');
+        try {
+            $type = input('post.type/d', 1);
+            $kw = input('post.kw', null, 'trim');
+            $status = input('post.status', null);
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
             }
-        }
-        if (!isNullOrEmpty($status)) {
-            $select->where('status', intval($status));
-        }
-        $total = $select->count();
-        $allowedSort = ['id' => 'A.id', 'rr' => 'A.rr', 'cdn_type' => 'A.cdn_type', 'recordnum' => 'A.recordnum', 'ip_type' => 'A.ip_type', 'active' => 'A.active', 'updatetime' => 'A.updatetime', 'status' => 'A.status'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('A.id', 'desc');
-        }
-        $list = $select->limit($offset, $limit)->field('A.*,B.name domain')->select();
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        return json(['total' => $total, 'rows' => $list]);
+            $select = Db::name('optimizeip')->alias('A')->join('domain B', 'A.did = B.id');
+            if (!empty($kw)) {
+                if ($type == 1) {
+                    $select->whereLike('rr|B.name', '%' . $kw . '%');
+                } elseif ($type == 2) {
+                    $select->whereLike('remark', '%' . $kw . '%');
+                }
+            }
+            if (!isNullOrEmpty($status)) {
+                $select->where('status', intval($status));
+            }
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'A.id', 'rr' => 'A.rr', 'cdn_type' => 'A.cdn_type', 'recordnum' => 'A.recordnum', 'ip_type' => 'A.ip_type', 'active' => 'A.active', 'updatetime' => 'A.updatetime', 'status' => 'A.status'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('A.id', 'desc');
+            }
+            $list = $select->limit($offset, $limit)->field('A.*,B.name domain')->select();
+
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取优选IP列表失败：' . $e->getMessage()]);
+        }
     }
 
     public function opipform()

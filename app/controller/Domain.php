@@ -165,16 +165,22 @@ class Domain extends BaseController
         $accounts = [];
         $types = [];
         foreach ($list as $row) {
-            $name = $row['id'] . '_' . DnsHelper::$dns_config[$row['type']]['name'];
+            $meta = DnsHelper::resolveTypeMeta($row['type'] ?? null);
+            $name = $row['id'] . '_' . $meta['name'];
             if (!array_key_exists($row['type'], $types)) {
-                $types[$row['type']] = DnsHelper::$dns_config[$row['type']]['name'];
+                $types[$row['type']] = $meta['name'];
             }
             if (!empty($row['remark'])) {
                 $name .= '（' . $row['remark'] . '）';
             }
-            $accounts[] = ['id' => $row['id'], 'name' => $name, 'type' => DnsHelper::$dns_config[$row['type']]['name'], 'add' => DnsHelper::$dns_config[$row['type']]['add']];
+            $accounts[] = ['id' => $row['id'], 'name' => $name, 'type' => $meta['name'], 'add' => $meta['add']];
         }
-        $categorys = Db::name('domain_category')->order('sort', 'asc')->order('id', 'desc')->select();
+        $categorys = [];
+        try {
+            $categorys = Db::name('domain_category')->order('sort', 'asc')->order('id', 'desc')->select();
+        } catch (\Throwable $e) {
+            // 旧库可能尚未创建 domain_category 表
+        }
         View::assign('accounts', $accounts);
         View::assign('types', $types);
         View::assign('categorys', $categorys);
@@ -188,9 +194,10 @@ class Domain extends BaseController
         $accounts = [];
         $types = [];
         foreach ($list as $row) {
-            $accounts[$row['id']] = $row['id'] . '_' . DnsHelper::$dns_config[$row['type']]['name'];
+            $meta = DnsHelper::resolveTypeMeta($row['type'] ?? null);
+            $accounts[$row['id']] = $row['id'] . '_' . $meta['name'];
             if (!array_key_exists($row['type'], $types)) {
-                $types[$row['type']] = DnsHelper::$dns_config[$row['type']]['name'];
+                $types[$row['type']] = $meta['name'];
             }
             if (!empty($row['remark'])) {
                 $accounts[$row['id']] .= '（' . $row['remark'] . '）';
@@ -497,47 +504,51 @@ class Domain extends BaseController
 
     public function record_data()
     {
-        $id = input('param.id/d');
-        $keyword = input('post.keyword', null, 'trim');
-        $subdomain = input('post.subdomain', null, 'trim');
-        $value = input('post.value', null, 'trim');
-        $type = input('post.type', null, 'trim');
-        $line = input('post.line', null, 'trim');
-        $status = input('post.status', null, 'trim');
-        $offset = input('post.offset/d', 0);
-        $limit = input('post.limit/d', 10);
-        if ($limit == 0) {
-            $page = 1;
-        } else {
-            $page = $offset / $limit + 1;
+        try {
+            $id = input('param.id/d');
+            $keyword = input('post.keyword', null, 'trim');
+            $subdomain = input('post.subdomain', null, 'trim');
+            $value = input('post.value', null, 'trim');
+            $type = input('post.type', null, 'trim');
+            $line = input('post.line', null, 'trim');
+            $status = input('post.status', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
+            }
+            $page = intval($offset / $limit) + 1;
+
+            $drow = Db::name('domain')->where('id', $id)->find();
+            if (!$drow) {
+                return json(['total' => 0, 'rows' => []]);
+            }
+            if (!checkPermission(0, $drow['name'])) return json(['total' => 0, 'rows' => []]);
+
+            $dns = DnsHelper::getModel($drow['aid'], $drow['name'], $drow['thirdid']);
+            $domainRecords = $dns->getDomainRecords($page, $limit, $keyword, $subdomain, $value, $type, $line, $status);
+            if (!$domainRecords) return json(['total' => 0, 'rows' => []]);
+
+            if (empty($keyword) && empty($subdomain) && empty($type) && isNullOrEmpty($line) && empty($status) && empty($value) && $domainRecords['total'] != $drow['recordcount']) {
+                Db::name('domain')->where('id', $id)->update(['recordcount' => $domainRecords['total']]);
+            }
+
+            $recordLine = cache('record_line_' . $id);
+
+            foreach ($domainRecords['list'] as &$row) {
+                $row['LineName'] = isset($recordLine[$row['Line']]) ? $recordLine[$row['Line']]['name'] : $row['Line'];
+            }
+
+            $dnstype = Db::name('account')->where('id', $drow['aid'])->value('type');
+            $meta = DnsHelper::resolveTypeMeta($dnstype ?? null);
+            if (!empty($meta['page'])) {
+                return json($domainRecords['list']);
+            }
+
+            return json(['total' => $domainRecords['total'], 'rows' => $domainRecords['list']]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取解析记录失败：' . $e->getMessage()]);
         }
-
-        $drow = Db::name('domain')->where('id', $id)->find();
-        if (!$drow) {
-            return json(['total' => 0, 'rows' => []]);
-        }
-        if (!checkPermission(0, $drow['name'])) return json(['total' => 0, 'rows' => []]);
-
-        $dns = DnsHelper::getModel($drow['aid'], $drow['name'], $drow['thirdid']);
-        $domainRecords = $dns->getDomainRecords($page, $limit, $keyword, $subdomain, $value, $type, $line, $status);
-        if (!$domainRecords) return json(['total' => 0, 'rows' => []]);
-
-        if (empty($keyword) && empty($subdomain) && empty($type) && isNullOrEmpty($line) && empty($status) && empty($value) && $domainRecords['total'] != $drow['recordcount']) {
-            Db::name('domain')->where('id', $id)->update(['recordcount' => $domainRecords['total']]);
-        }
-
-        $recordLine = cache('record_line_' . $id);
-
-        foreach ($domainRecords['list'] as &$row) {
-            $row['LineName'] = isset($recordLine[$row['Line']]) ? $recordLine[$row['Line']]['name'] : $row['Line'];
-        }
-
-        $dnstype = Db::name('account')->where('id', $drow['aid'])->value('type');
-        if (DnsHelper::$dns_config[$dnstype]['page']) {
-            return json($domainRecords['list']);
-        }
-
-        return json(['total' => $domainRecords['total'], 'rows' => $domainRecords['list']]);
     }
 
     public function record_list()
@@ -1034,13 +1045,20 @@ class Domain extends BaseController
         if (!checkPermission(0, $drow['name'])) return $this->alert('error', '无权限');
 
         if (request()->isPost()) {
-            $offset = input('post.offset/d');
-            $limit = input('post.limit/d');
-            $page = $offset / $limit + 1;
-            $dns = DnsHelper::getModel($drow['aid'], $drow['name'], $drow['thirdid']);
-            $domainRecords = $dns->getDomainRecordLog($page, $limit);
-            if (!$domainRecords) return json(['total' => 0, 'rows' => []]);
-            return json(['total' => $domainRecords['total'], 'rows' => $domainRecords['list']]);
+            try {
+                $offset = input('post.offset/d', 0);
+                $limit = input('post.limit/d', 15);
+                if ($limit <= 0) {
+                    $limit = 15;
+                }
+                $page = intval($offset / $limit) + 1;
+                $dns = DnsHelper::getModel($drow['aid'], $drow['name'], $drow['thirdid']);
+                $domainRecords = $dns->getDomainRecordLog($page, $limit);
+                if (!$domainRecords) return json(['total' => 0, 'rows' => []]);
+                return json(['total' => $domainRecords['total'], 'rows' => $domainRecords['list']]);
+            } catch (\Throwable $e) {
+                return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取操作日志失败：' . $e->getMessage()]);
+            }
         }
 
         View::assign('domainId', $id);
@@ -1226,26 +1244,29 @@ class Domain extends BaseController
 
     public function weight_data()
     {
-        $id = input('param.id/d');
-        $keyword = input('post.keyword', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        if ($limit == 0) {
-            $page = 1;
-        } else {
-            $page = $offset / $limit + 1;
-        }
+        try {
+            $id = input('param.id/d');
+            $keyword = input('post.keyword', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
+            }
+            $page = intval($offset / $limit) + 1;
 
-        $drow = Db::name('domain')->where('id', $id)->find();
-        if (!$drow) {
-            return json(['total' => 0, 'rows' => []]);
-        }
-        if (!checkPermission(0, $drow['name'])) return json(['total' => 0, 'rows' => []]);
+            $drow = Db::name('domain')->where('id', $id)->find();
+            if (!$drow) {
+                return json(['total' => 0, 'rows' => []]);
+            }
+            if (!checkPermission(0, $drow['name'])) return json(['total' => 0, 'rows' => []]);
 
-        $dns = DnsHelper::getModel($drow['aid'], $drow['name'], $drow['thirdid']);
-        $domainRecords = $dns->getWeightSubDomains($page, $limit, $keyword);
-        if (!$domainRecords) return json(['total' => 0, 'rows' => []]);
-        return json(['total' => $domainRecords['total'], 'rows' => $domainRecords['list']]);
+            $dns = DnsHelper::getModel($drow['aid'], $drow['name'], $drow['thirdid']);
+            $domainRecords = $dns->getWeightSubDomains($page, $limit, $keyword);
+            if (!$domainRecords) return json(['total' => 0, 'rows' => []]);
+            return json(['total' => $domainRecords['total'], 'rows' => $domainRecords['list']]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取权重配置失败：' . $e->getMessage()]);
+        }
     }
     
     public function alias()

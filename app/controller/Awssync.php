@@ -141,49 +141,56 @@ class Awssync extends BaseController
     public function task_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
-        $type = input('post.type/d', 1);
-        $kw = input('post.kw', null, 'trim');
-        $status = input('post.status', null);
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        $select = Db::name('aws_sync')->alias('A')->join('domain B', 'A.did = B.id');
-        if (!empty($kw)) {
-            if ($type == 1) {
-                $select->whereLike('rr|B.name|A.aws_instance_id', '%' . $kw . '%');
-            } elseif ($type == 2) {
-                $select->whereLike('remark', '%' . $kw . '%');
-            } elseif ($type == 3) {
-                $select->where('A.aws_account_id', $kw);
+        try {
+            $type = input('post.type/d', 1);
+            $kw = input('post.kw', null, 'trim');
+            $status = input('post.status', null);
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
             }
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+            $select = Db::name('aws_sync')->alias('A')->join('domain B', 'A.did = B.id');
+            if (!empty($kw)) {
+                if ($type == 1) {
+                    $select->whereLike('rr|B.name|A.aws_instance_id', '%' . $kw . '%');
+                } elseif ($type == 2) {
+                    $select->whereLike('remark', '%' . $kw . '%');
+                } elseif ($type == 3) {
+                    $select->where('A.aws_account_id', $kw);
+                }
+            }
+            if (!isNullOrEmpty($status)) {
+                $select->where('A.status', intval($status));
+            }
+            $total = (clone $select)->count();
+            $allowedSort = [
+                'id' => 'A.id',
+                'rr' => 'A.rr',
+                'aws_instance_id' => 'A.aws_instance_id',
+                'last_ip' => 'A.last_ip',
+                'frequency' => 'A.frequency',
+                'active' => 'A.active',
+                'checktime' => 'A.checktime',
+                'sync_count' => 'A.sync_count',
+            ];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('A.id', 'desc');
+            }
+            $list = $select->limit($offset, $limit)->field('A.*,B.name domain')->select()->toArray();
+            foreach ($list as &$row) {
+                $row['checktimestr'] = $row['checktime'] > 0 ? date('Y-m-d H:i:s', $row['checktime']) : '未运行';
+                $row['addtimestr'] = $row['addtime'] > 0 ? date('Y-m-d H:i:s', $row['addtime']) : '';
+            }
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取AWS同步列表失败：' . $e->getMessage()]);
         }
-        if (!isNullOrEmpty($status)) {
-            $select->where('A.status', intval($status));
-        }
-        $total = $select->count();
-        $allowedSort = [
-            'id' => 'A.id',
-            'rr' => 'A.rr',
-            'aws_instance_id' => 'A.aws_instance_id',
-            'last_ip' => 'A.last_ip',
-            'frequency' => 'A.frequency',
-            'active' => 'A.active',
-            'checktime' => 'A.checktime',
-            'sync_count' => 'A.sync_count',
-        ];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('A.id', 'desc');
-        }
-        $list = $select->limit($offset, $limit)->field('A.*,B.name domain')->select()->toArray();
-        foreach ($list as &$row) {
-            $row['checktimestr'] = $row['checktime'] > 0 ? date('Y-m-d H:i:s', $row['checktime']) : '未运行';
-            $row['addtimestr'] = $row['addtime'] > 0 ? date('Y-m-d H:i:s', $row['addtime']) : '';
-        }
-        return json(['total' => $total, 'rows' => $list]);
     }
 
     public function task_op()

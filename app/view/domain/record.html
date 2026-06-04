@@ -246,7 +246,7 @@ td{overflow: hidden;text-overflow: ellipsis;white-space: nowrap;max-width:360px;
 <script src="/static/js/bootstrap-table-1.21.4.min.js"></script>
 <script src="/static/js/bootstrap-table-page-jump-to-1.21.4.min.js"></script>
 <script src="/static/js/bootstrapValidator.min.js"></script>
-<script src="/static/js/custom.js?v=1006"></script>
+<script src="/static/js/custom.js?v=1007"></script>
 <script>
 var recordLine = {$recordLine|json_encode|raw};
 var dnsconfig = {$dnsconfig|json_encode|raw};
@@ -254,6 +254,10 @@ var defaultLine = recordLine[0].id;
 var sidePagination = dnsconfig.page ? 'client' : 'server';
 var showWeight = dnsconfig.weight;
 $(document).ready(function(){
+	if (typeof $.fn.bootstrapTable === 'undefined') {
+		layer.alert('表格组件未加载，请 Ctrl+F5 强刷页面；若仍失败请检查 /static/js/bootstrap-table-1.21.4.min.js 是否可访问', {icon:2});
+		return;
+	}
 	updateToolbar();
 	const pageSizeKey = 'record_pagesize';
 	const pageNumber = typeof window.$_GET['pageNumber'] != 'undefined' ? parseInt(window.$_GET['pageNumber']) : 1;
@@ -392,8 +396,10 @@ $(document).ready(function(){
 	$("#form-store select[name=type]").change(typeChange);
 	$("#form-store2 select[name=type]").change(typeChange);
 
-	$("#form-store").bootstrapValidator();
-	$("#form-store2").bootstrapValidator();
+	if ($.fn.bootstrapValidator) {
+		$("#form-store").bootstrapValidator();
+		$("#form-store2").bootstrapValidator();
+	}
 
 	$.each(recordLine, function(index, item){
 		if(item.parent == null){

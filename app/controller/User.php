@@ -25,26 +25,33 @@ class User extends BaseController
     public function user_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
-        $kw = input('post.kw', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
+        try {
+            $kw = input('post.kw', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
+            }
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $select = Db::name('user');
-        if (!empty($kw)) {
-            $select->whereLike('id|username', $kw);
-        }
-        $total = $select->count();
-        $allowedSort = ['id' => 'id', 'username' => 'username', 'level' => 'level', 'is_api' => 'is_api', 'regtime' => 'regtime', 'lasttime' => 'lasttime', 'status' => 'status'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('id', 'desc');
-        }
-        $rows = $select->limit($offset, $limit)->select();
+            $select = Db::name('user');
+            if (!empty($kw)) {
+                $select->whereLike('id|username', $kw);
+            }
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'id', 'username' => 'username', 'level' => 'level', 'is_api' => 'is_api', 'regtime' => 'regtime', 'lasttime' => 'lasttime', 'status' => 'status'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('id', 'desc');
+            }
+            $rows = $select->limit($offset, $limit)->select();
 
-        return json(['total' => $total, 'rows' => $rows]);
+            return json(['total' => $total, 'rows' => $rows]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取用户列表失败：' . $e->getMessage()]);
+        }
     }
 
     public function user_op()
@@ -168,29 +175,36 @@ class User extends BaseController
 
     public function log_data()
     {
-        $uid = input('post.uid', null, 'trim');
-        $kw = input('post.kw', null, 'trim');
-        $domain = input('post.domain', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
+        try {
+            $uid = input('post.uid', null, 'trim');
+            $kw = input('post.kw', null, 'trim');
+            $domain = input('post.domain', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
+            }
 
-        $select = Db::name('log');
-        if ($this->request->user['type'] == 'domain') {
-            $select->where('domain', $this->request->user['name']);
-        } elseif ($this->request->user['level'] == 1) {
-            $select->where('uid', $this->request->user['id']);
-        } elseif (!isNullOrEmpty($uid)) {
-            $select->where('uid', $uid);
-        }
-        if (!empty($kw)) {
-            $select->whereLike('action|data', '%' . $kw . '%');
-        }
-        if (!empty($domain)) {
-            $select->where('domain', $domain);
-        }
-        $total = $select->count();
-        $rows = $select->order('id', 'desc')->limit($offset, $limit)->select();
+            $select = Db::name('log');
+            if ($this->request->user['type'] == 'domain') {
+                $select->where('domain', $this->request->user['name']);
+            } elseif ($this->request->user['level'] == 1) {
+                $select->where('uid', $this->request->user['id']);
+            } elseif (!isNullOrEmpty($uid)) {
+                $select->where('uid', $uid);
+            }
+            if (!empty($kw)) {
+                $select->whereLike('action|data', '%' . $kw . '%');
+            }
+            if (!empty($domain)) {
+                $select->where('domain', $domain);
+            }
+            $total = (clone $select)->count();
+            $rows = $select->order('id', 'desc')->limit($offset, $limit)->select();
 
-        return json(['total' => $total, 'rows' => $rows]);
+            return json(['total' => $total, 'rows' => $rows]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取操作日志失败：' . $e->getMessage()]);
+        }
     }
 }

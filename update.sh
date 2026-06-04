@@ -232,6 +232,57 @@ ensure_core_schema() {
     mysql_exec "ALTER TABLE \`${DB_PREFIX}account\` ADD COLUMN \`config\` text DEFAULT NULL" || true
     ok "已补加 ${DB_PREFIX}account.config"
   fi
+
+  if ! column_exists "dmtask" "backup_mode"; then
+    warn "缺少 ${DB_PREFIX}dmtask.backup_mode，正在补加..."
+    mysql_exec "ALTER TABLE \`${DB_PREFIX}dmtask\` ADD COLUMN \`backup_mode\` tinyint(1) NOT NULL DEFAULT 0" || true
+    ok "已补加 ${DB_PREFIX}dmtask.backup_mode"
+  fi
+
+  if ! table_exists "dmbackup_pool"; then
+    warn "缺少 ${DB_PREFIX}dmbackup_pool，正在补建..."
+    mysql_exec "CREATE TABLE IF NOT EXISTS \`${DB_PREFIX}dmbackup_pool\` (
+      \`id\` int(11) unsigned NOT NULL AUTO_INCREMENT,
+      \`task_id\` int(11) unsigned NOT NULL,
+      \`ip\` varchar(128) NOT NULL,
+      \`sort\` int(11) NOT NULL DEFAULT 0,
+      \`addtime\` int(11) NOT NULL DEFAULT 0,
+      PRIMARY KEY (\`id\`),
+      KEY \`task_id\` (\`task_id\`),
+      KEY \`ip\` (\`ip\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+    ok "已创建 ${DB_PREFIX}dmbackup_pool"
+  fi
+
+  if ! table_exists "aws_sync"; then
+    warn "缺少 ${DB_PREFIX}aws_sync，正在补建..."
+    mysql_exec "CREATE TABLE IF NOT EXISTS \`${DB_PREFIX}aws_sync\` (
+      \`id\` int(11) unsigned NOT NULL AUTO_INCREMENT,
+      \`did\` int(11) unsigned NOT NULL,
+      \`rr\` varchar(128) NOT NULL,
+      \`recordid\` varchar(60) NOT NULL,
+      \`recordinfo\` varchar(200) DEFAULT NULL,
+      \`aws_account_id\` varchar(64) NOT NULL DEFAULT '',
+      \`aws_region\` varchar(64) NOT NULL DEFAULT '',
+      \`aws_instance_id\` varchar(64) NOT NULL DEFAULT '',
+      \`last_ip\` varchar(128) DEFAULT NULL,
+      \`last_dns_ip\` varchar(128) DEFAULT NULL,
+      \`frequency\` int(11) NOT NULL DEFAULT 3,
+      \`checktime\` int(11) NOT NULL DEFAULT 0,
+      \`checknexttime\` int(11) NOT NULL DEFAULT 0,
+      \`sync_count\` int(11) NOT NULL DEFAULT 0,
+      \`status\` tinyint(1) NOT NULL DEFAULT 0,
+      \`errmsg\` varchar(500) DEFAULT NULL,
+      \`remark\` varchar(100) DEFAULT NULL,
+      \`active\` tinyint(1) NOT NULL DEFAULT 1,
+      \`addtime\` int(11) NOT NULL DEFAULT 0,
+      PRIMARY KEY (\`id\`),
+      KEY \`did\` (\`did\`),
+      KEY \`aws_instance_id\` (\`aws_instance_id\`),
+      KEY \`checknexttime\` (\`checknexttime\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+    ok "已创建 ${DB_PREFIX}aws_sync"
+  fi
 }
 
 sync_files() {
@@ -346,6 +397,15 @@ verify_upgrade() {
   fi
   if ! table_exists "domain_category"; then
     warn "domain_category 仍缺失，域名分类筛选可能报错"
+  fi
+  if ! table_exists "aws_sync"; then
+    warn "aws_sync 仍缺失，AWS IP 同步功能不可用"
+  fi
+  if ! table_exists "dmbackup_pool"; then
+    warn "dmbackup_pool 仍缺失，容灾备用 IP 池不可用"
+  fi
+  if ! column_exists "dmtask" "backup_mode"; then
+    warn "dmtask.backup_mode 仍缺失，备用 IP 池模式不可用"
   fi
 }
 

@@ -191,9 +191,11 @@ new Vue({
             var recordinfo = JSON.parse(this.set.recordinfo);
             this.recordList = [{RecordId:this.set.recordid, Value:recordinfo.Value, Line:recordinfo.Line, LineName:recordinfo.LineName, TTL:recordinfo.TTL}];
         }
+        if ($.fn.bootstrapValidator) {
         $("#taskform").bootstrapValidator({
             live: 'submitted',
         });
+        }
         $('[data-toggle="tooltip"]').tooltip();
     },
     methods: {

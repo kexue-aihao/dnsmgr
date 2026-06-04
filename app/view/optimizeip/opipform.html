@@ -155,9 +155,11 @@ new Vue({
             })
             this.set.ip_type_select = this.set.ip_type.split(',')
         }
+        if ($.fn.bootstrapValidator) {
         $("#taskform").bootstrapValidator({
             live: 'submitted',
         });
+        }
         $('[data-toggle="tooltip"]').tooltip();
         $('[data-toggle="popover"]').popover()
     },

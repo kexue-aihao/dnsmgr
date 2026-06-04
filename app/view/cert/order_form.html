@@ -136,9 +136,11 @@ new Vue({
         }else{
             this.set.keytype = 'RSA';
         }
+        if ($.fn.bootstrapValidator) {
         $("#taskform").bootstrapValidator({
             live: 'submitted',
         });
+        }
         $('[data-toggle="tooltip"]').tooltip();
     },
     methods: {

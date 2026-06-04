@@ -15,10 +15,12 @@ if (parameter_str !== undefined) {
 }
 
 function searchRefresh(){
+	if (typeof $.fn.bootstrapTable === 'undefined') return false;
 	$('#listTable').bootstrapTable('refresh');
 	return false;
 }
 function searchSubmit(){
+	if (typeof $.fn.bootstrapTable === 'undefined') return false;
 	if(typeof sidePagination != 'undefined' && sidePagination == 'client'){
 		$('#listTable').bootstrapTable('refresh');
 	}else{
@@ -27,6 +29,7 @@ function searchSubmit(){
 	return false;
 }
 function searchClear(){
+	if (typeof $.fn.bootstrapTable === 'undefined') return false;
 	$('#searchToolbar').find('input[name]').each(function() {
 		$(this).val('');
 	});

@@ -28,44 +28,51 @@ class Cert extends BaseController
 
     public function account_data()
     {
-        if (!checkPermission(2)) return $this->alert('error', '无权限');
-        $deploy = input('get.deploy/d', 0);
-        $kw = $this->request->post('kw', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        $select = Db::name('cert_account')->where('deploy', $deploy);
-        if (!empty($kw)) {
-            $select->whereLike('name|remark', '%' . $kw . '%')->whereOr('id', $kw);
-        }
-        $total = $select->count();
-        $allowedSort = ['id' => 'id', 'typename' => 'type', 'name' => 'name', 'remark' => 'remark', 'addtime' => 'addtime'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('id', 'desc');
-        }
-        $rows = $select->limit($offset, $limit)->select();
-
-        $list = [];
-        foreach ($rows as $row) {
-            if ($deploy == 1) {
-                if (!empty($row['type']) && isset(DeployHelper::$deploy_config[$row['type']])) {
-                    $row['typename'] = DeployHelper::$deploy_config[$row['type']]['name'];
-                    $row['icon'] = DeployHelper::$deploy_config[$row['type']]['icon'];
-                }
-            } else {
-                if (!empty($row['type']) && isset(CertHelper::$cert_config[$row['type']])) {
-                    $row['typename'] = CertHelper::$cert_config[$row['type']]['name'];
-                    $row['icon'] = CertHelper::$cert_config[$row['type']]['icon'];
-                }
+        if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
+        try {
+            $deploy = input('get.deploy/d', 0);
+            $kw = $this->request->post('kw', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
             }
-            $list[] = $row;
-        }
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        return json(['total' => $total, 'rows' => $list]);
+            $select = Db::name('cert_account')->where('deploy', $deploy);
+            if (!empty($kw)) {
+                $select->whereLike('name|remark', '%' . $kw . '%')->whereOr('id', $kw);
+            }
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'id', 'typename' => 'type', 'name' => 'name', 'remark' => 'remark', 'addtime' => 'addtime'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('id', 'desc');
+            }
+            $rows = $select->limit($offset, $limit)->select();
+
+            $list = [];
+            foreach ($rows as $row) {
+                if ($deploy == 1) {
+                    if (!empty($row['type']) && isset(DeployHelper::$deploy_config[$row['type']])) {
+                        $row['typename'] = DeployHelper::$deploy_config[$row['type']]['name'];
+                        $row['icon'] = DeployHelper::$deploy_config[$row['type']]['icon'];
+                    }
+                } else {
+                    if (!empty($row['type']) && isset(CertHelper::$cert_config[$row['type']])) {
+                        $row['typename'] = CertHelper::$cert_config[$row['type']]['name'];
+                        $row['icon'] = CertHelper::$cert_config[$row['type']]['icon'];
+                    }
+                }
+                $list[] = $row;
+            }
+
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取证书账户列表失败：' . $e->getMessage()]);
+        }
     }
 
     public function account_op()
@@ -216,65 +223,76 @@ class Cert extends BaseController
 
     public function order_data()
     {
-        if (!checkPermission(2)) return $this->alert('error', '无权限');
-        $domain = $this->request->post('domain', null, 'trim');
-        $id = input('post.id');
-        $aid = input('post.aid', null, 'trim');
-        $type = input('post.type', null, 'trim');
-        $status = input('post.status', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        $select = Db::name('cert_order')->alias('A')->leftJoin('cert_account B', 'A.aid = B.id');
-        if (!empty($id)) {
-            $select->where('A.id', $id);
-        } elseif (!empty($domain)) {
-            $oids = Db::name('cert_domain')->where('domain', 'like', '%' . $domain . '%')->column('oid');
-            $select->whereIn('A.id', $oids);
-        }
-        if (!empty($aid)) {
-            $select->where('A.aid', $aid);
-        }
-        if (!empty($type)) {
-            $select->where('B.type', $type);
-        }
-        if (!isNullOrEmpty($status)) {
-            if ($status == '5') {
-                $select->where('A.status', '<', 0);
-            } elseif ($status == '6') {
-                $select->where('A.expiretime', '<', date('Y-m-d H:i:s', time() + 86400 * 7))->where('A.expiretime', '>=', date('Y-m-d H:i:s'));
-            } elseif ($status == '7') {
-                $select->where('A.expiretime', '<', date('Y-m-d H:i:s'));
-            } else {
-                $select->where('A.status', $status);
+        if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
+        try {
+            $domain = $this->request->post('domain', null, 'trim');
+            $id = input('post.id');
+            $aid = input('post.aid', null, 'trim');
+            $type = input('post.type', null, 'trim');
+            $status = input('post.status', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
             }
-        }
-        $total = $select->count();
-        $allowedSort = ['id' => 'A.id', 'typename' => 'B.type', 'keytype' => 'A.keytype', 'isauto' => 'A.isauto', 'issuetime' => 'A.issuetime', 'end_day' => 'A.expiretime', 'status' => 'A.status'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('A.id', 'desc');
-        }
-        $rows = $select->fieldRaw('A.*,B.type,B.remark aremark')->limit($offset, $limit)->select();
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $list = [];
-        foreach ($rows as $row) {
-            if (!empty($row['type']) && isset(CertHelper::$cert_config[$row['type']])) {
-                $row['typename'] = CertHelper::$cert_config[$row['type']]['name'];
-                $row['icon'] = CertHelper::$cert_config[$row['type']]['icon'];
-            } else {
-                $row['typename'] = null;
+            $select = Db::name('cert_order')->alias('A')->leftJoin('cert_account B', 'A.aid = B.id');
+            if (!empty($id)) {
+                $select->where('A.id', $id);
+            } elseif (!empty($domain)) {
+                $oids = Db::name('cert_domain')->where('domain', 'like', '%' . $domain . '%')->column('oid');
+                $select->whereIn('A.id', $oids ?: [0]);
             }
-            $row['domains'] = Db::name('cert_domain')->where('oid', $row['id'])->order('sort', 'ASC')->column('domain');
-            $row['end_day'] = $row['expiretime'] ? ceil((strtotime($row['expiretime']) - time()) / 86400) : null;
-            if ($row['error']) $row['error'] = htmlspecialchars(str_replace("'", "\\'", $row['error']));
-            $list[] = $row;
-        }
+            if (!empty($aid)) {
+                $select->where('A.aid', $aid);
+            }
+            if (!empty($type)) {
+                $select->where('B.type', $type);
+            }
+            if (!isNullOrEmpty($status)) {
+                if ($status == '5') {
+                    $select->where('A.status', '<', 0);
+                } elseif ($status == '6') {
+                    $select->where('A.expiretime', '<', date('Y-m-d H:i:s', time() + 86400 * 7))->where('A.expiretime', '>=', date('Y-m-d H:i:s'));
+                } elseif ($status == '7') {
+                    $select->where('A.expiretime', '<', date('Y-m-d H:i:s'));
+                } else {
+                    $select->where('A.status', $status);
+                }
+            }
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'A.id', 'typename' => 'B.type', 'keytype' => 'A.keytype', 'isauto' => 'A.isauto', 'issuetime' => 'A.issuetime', 'end_day' => 'A.expiretime', 'status' => 'A.status'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('A.id', 'desc');
+            }
+            $rows = $select->fieldRaw('A.*,B.type,B.remark aremark')->limit($offset, $limit)->select();
 
-        return json(['total' => $total, 'rows' => $list]);
+            $list = [];
+            foreach ($rows as $row) {
+                if (!empty($row['type']) && isset(CertHelper::$cert_config[$row['type']])) {
+                    $row['typename'] = CertHelper::$cert_config[$row['type']]['name'];
+                    $row['icon'] = CertHelper::$cert_config[$row['type']]['icon'];
+                } else {
+                    $row['typename'] = null;
+                }
+                try {
+                    $row['domains'] = Db::name('cert_domain')->where('oid', $row['id'])->order('sort', 'ASC')->column('domain');
+                } catch (\Throwable $e) {
+                    $row['domains'] = [];
+                }
+                $row['end_day'] = $row['expiretime'] ? ceil((strtotime($row['expiretime']) - time()) / 86400) : null;
+                if ($row['error']) $row['error'] = htmlspecialchars(str_replace("'", "\\'", $row['error']));
+                $list[] = $row;
+            }
+
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取证书订单列表失败：' . $e->getMessage()]);
+        }
     }
 
     public function order_info()
@@ -657,63 +675,74 @@ class Cert extends BaseController
 
     public function deploy_data()
     {
-        if (!checkPermission(2)) return $this->alert('error', '无权限');
-        $domain = $this->request->post('domain', null, 'trim');
-        $oid = input('post.oid');
-        $aid = input('post.aid', null, 'trim');
-        $type = input('post.type', null, 'trim');
-        $status = input('post.status', null, 'trim');
-        $remark = input('post.remark', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        $select = Db::name('cert_deploy')->alias('A')->leftJoin('cert_account B', 'A.aid = B.id')->leftJoin('cert_order C', 'A.oid = C.id')->leftJoin('cert_account D', 'C.aid = D.id');
-        if (!empty($oid)) {
-            $select->where('A.oid', $oid);
-        } elseif (!empty($domain)) {
-            $oids = Db::name('cert_domain')->where('domain', 'like', '%' . $domain . '%')->column('oid');
-            $select->whereIn('oid', $oids);
-        }
-        if (!empty($aid)) {
-            $select->where('A.aid', $aid);
-        }
-        if (!empty($type)) {
-            $select->where('B.type', $type);
-        }
-        if (!isNullOrEmpty($status)) {
-            $select->where('A.status', $status);
-        }
-        if (!empty($remark)) {
-            $select->where('A.remark', $remark);
-        }
-        $total = $select->count();
-        $allowedSort = ['id' => 'A.id', 'typename' => 'B.type', 'remark' => 'A.remark', 'active' => 'A.active', 'lasttime' => 'A.lasttime', 'status' => 'A.status'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('A.id', 'desc');
-        }
-        $rows = $select->fieldRaw('A.*,B.type,B.remark aremark,B.name aname,D.type certtype,D.id certaid')->limit($offset, $limit)->select();
-
-        $list = [];
-        foreach ($rows as $row) {
-            if (!empty($row['type']) && isset(DeployHelper::$deploy_config[$row['type']])) {
-                $row['typename'] = DeployHelper::$deploy_config[$row['type']]['name'];
-                $row['icon'] = DeployHelper::$deploy_config[$row['type']]['icon'];
+        if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
+        try {
+            $domain = $this->request->post('domain', null, 'trim');
+            $oid = input('post.oid');
+            $aid = input('post.aid', null, 'trim');
+            $type = input('post.type', null, 'trim');
+            $status = input('post.status', null, 'trim');
+            $remark = input('post.remark', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
             }
-            if (!empty($row['certtype']) && isset(CertHelper::$cert_config[$row['certtype']])) {
-                $row['certtypename'] = CertHelper::$cert_config[$row['certtype']]['name'];
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+            $select = Db::name('cert_deploy')->alias('A')->leftJoin('cert_account B', 'A.aid = B.id')->leftJoin('cert_order C', 'A.oid = C.id')->leftJoin('cert_account D', 'C.aid = D.id');
+            if (!empty($oid)) {
+                $select->where('A.oid', $oid);
+            } elseif (!empty($domain)) {
+                $oids = Db::name('cert_domain')->where('domain', 'like', '%' . $domain . '%')->column('oid');
+                $select->whereIn('oid', $oids ?: [0]);
+            }
+            if (!empty($aid)) {
+                $select->where('A.aid', $aid);
+            }
+            if (!empty($type)) {
+                $select->where('B.type', $type);
+            }
+            if (!isNullOrEmpty($status)) {
+                $select->where('A.status', $status);
+            }
+            if (!empty($remark)) {
+                $select->where('A.remark', $remark);
+            }
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'A.id', 'typename' => 'B.type', 'remark' => 'A.remark', 'active' => 'A.active', 'lasttime' => 'A.lasttime', 'status' => 'A.status'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
             } else {
-                $row['certtypename'] = '手动续期';
+                $select->order('A.id', 'desc');
             }
-            $row['domains'] = Db::name('cert_domain')->where('oid', $row['oid'])->order('sort', 'ASC')->column('domain');
-            if ($row['error']) $row['error'] = htmlspecialchars(str_replace("'", "\\'", $row['error']));
-            $list[] = $row;
-        }
+            $rows = $select->fieldRaw('A.*,B.type,B.remark aremark,B.name aname,D.type certtype,D.id certaid')->limit($offset, $limit)->select();
 
-        return json(['total' => $total, 'rows' => $list]);
+            $list = [];
+            foreach ($rows as $row) {
+                if (!empty($row['type']) && isset(DeployHelper::$deploy_config[$row['type']])) {
+                    $row['typename'] = DeployHelper::$deploy_config[$row['type']]['name'];
+                    $row['icon'] = DeployHelper::$deploy_config[$row['type']]['icon'];
+                }
+                if (!empty($row['certtype']) && isset(CertHelper::$cert_config[$row['certtype']])) {
+                    $row['certtypename'] = CertHelper::$cert_config[$row['certtype']]['name'];
+                } else {
+                    $row['certtypename'] = '手动续期';
+                }
+                try {
+                    $row['domains'] = Db::name('cert_domain')->where('oid', $row['oid'])->order('sort', 'ASC')->column('domain');
+                } catch (\Throwable $e) {
+                    $row['domains'] = [];
+                }
+                if ($row['error']) $row['error'] = htmlspecialchars(str_replace("'", "\\'", $row['error']));
+                $list[] = $row;
+            }
+
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取部署任务列表失败：' . $e->getMessage()]);
+        }
     }
 
     public function deploy_op()
@@ -882,34 +911,41 @@ class Cert extends BaseController
 
     public function cname_data()
     {
-        if (!checkPermission(2)) return $this->alert('error', '无权限');
-        $kw = $this->request->post('kw', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
+        if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
+        try {
+            $kw = $this->request->post('kw', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
+            }
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $select = Db::name('cert_cname')->alias('A')->leftJoin('domain B', 'A.did = B.id');
-        if (!empty($kw)) {
-            $select->whereLike('A.domain', '%' . $kw . '%');
-        }
-        $total = $select->count();
-        $allowedSort = ['id' => 'A.id', 'domain' => 'A.domain', 'status' => 'A.status', 'addtime' => 'A.addtime'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('A.id', 'desc');
-        }
-        $rows = $select->limit($offset, $limit)->field('A.*,B.name cnamedomain')->select();
+            $select = Db::name('cert_cname')->alias('A')->leftJoin('domain B', 'A.did = B.id');
+            if (!empty($kw)) {
+                $select->whereLike('A.domain', '%' . $kw . '%');
+            }
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'A.id', 'domain' => 'A.domain', 'status' => 'A.status', 'addtime' => 'A.addtime'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('A.id', 'desc');
+            }
+            $rows = $select->limit($offset, $limit)->field('A.*,B.name cnamedomain')->select();
 
-        $list = [];
-        foreach ($rows as $row) {
-            $row['host'] = $this->getCnameHost($row['domain']);
-            $row['record'] = $row['rr'] . '.' . $row['cnamedomain'];
-            $list[] = $row;
-        }
+            $list = [];
+            foreach ($rows as $row) {
+                $row['host'] = $this->getCnameHost($row['domain']);
+                $row['record'] = $row['rr'] . '.' . $row['cnamedomain'];
+                $list[] = $row;
+            }
 
-        return json(['total' => $total, 'rows' => $list]);
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取CNAME列表失败：' . $e->getMessage()]);
+        }
     }
 
     private function getCnameHost($domain)

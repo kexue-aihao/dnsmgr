@@ -19,45 +19,52 @@ class Schedule extends BaseController
     public function stask_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
-        $type = input('post.type/d', 1);
-        $kw = input('post.kw', null, 'trim');
-        $stype = input('post.stype', null);
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        $select = Db::name('sctask')->alias('A')->join('domain B', 'A.did = B.id');
-        if (!empty($kw)) {
-            if ($type == 1) {
-                $select->whereLike('rr|B.name', '%' . $kw . '%');
-            } elseif ($type == 2) {
-                $select->where('recordid', $kw);
-            } elseif ($type == 3) {
-                $select->where('value', $kw);
-            } elseif ($type == 4) {
-                $select->whereLike('remark', '%' . $kw . '%');
+        try {
+            $type = input('post.type/d', 1);
+            $kw = input('post.kw', null, 'trim');
+            $stype = input('post.stype', null);
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
             }
-        }
-        if (!isNullOrEmpty($stype)) {
-            $select->where('type', $stype);
-        }
-        $total = $select->count();
-        $allowedSort = ['id' => 'A.id', 'rr' => 'A.rr', 'type' => 'A.type', 'switchtype' => 'A.switchtype', 'active' => 'A.active', 'updatetimestr' => 'A.updatetime', 'nexttimestr' => 'A.nexttime', 'addtimestr' => 'A.addtime', 'remark' => 'A.remark'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('A.id', 'desc');
-        }
-        $list = $select->limit($offset, $limit)->field('A.*,B.name domain')->select()->toArray();
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        foreach ($list as &$row) {
-            $row['addtimestr'] = date('Y-m-d H:i:s', $row['addtime']);
-            $row['updatetimestr'] = $row['updatetime'] > 0 ? date('Y-m-d H:i:s', $row['updatetime']) : '未运行';
-            $row['nexttimestr'] = $row['nexttime'] > 0 ? date('Y-m-d H:i:s', $row['nexttime']) : '无';
-        }
+            $select = Db::name('sctask')->alias('A')->join('domain B', 'A.did = B.id');
+            if (!empty($kw)) {
+                if ($type == 1) {
+                    $select->whereLike('rr|B.name', '%' . $kw . '%');
+                } elseif ($type == 2) {
+                    $select->where('recordid', $kw);
+                } elseif ($type == 3) {
+                    $select->where('value', $kw);
+                } elseif ($type == 4) {
+                    $select->whereLike('remark', '%' . $kw . '%');
+                }
+            }
+            if (!isNullOrEmpty($stype)) {
+                $select->where('type', $stype);
+            }
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'A.id', 'rr' => 'A.rr', 'type' => 'A.type', 'switchtype' => 'A.switchtype', 'active' => 'A.active', 'updatetimestr' => 'A.updatetime', 'nexttimestr' => 'A.nexttime', 'addtimestr' => 'A.addtime', 'remark' => 'A.remark'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('A.id', 'desc');
+            }
+            $list = $select->limit($offset, $limit)->field('A.*,B.name domain')->select()->toArray();
 
-        return json(['total' => $total, 'rows' => $list]);
+            foreach ($list as &$row) {
+                $row['addtimestr'] = date('Y-m-d H:i:s', $row['addtime']);
+                $row['updatetimestr'] = $row['updatetime'] > 0 ? date('Y-m-d H:i:s', $row['updatetime']) : '未运行';
+                $row['nexttimestr'] = $row['nexttime'] > 0 ? date('Y-m-d H:i:s', $row['nexttime']) : '无';
+            }
+
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取定时切换列表失败：' . $e->getMessage()]);
+        }
     }
 
     public function stask_op()

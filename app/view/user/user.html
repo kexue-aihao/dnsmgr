@@ -113,9 +113,13 @@
 <script src="/static/js/bootstrap-table-page-jump-to-1.21.4.min.js"></script>
 <script src="/static/js/select2-4.0.13.min.js"></script>
 <script src="/static/js/select2-i18n-zh-CN-4.0.13.min.js"></script>
-<script src="/static/js/custom.js?v=1006"></script>
+<script src="/static/js/custom.js?v=1007"></script>
 <script>
 $(document).ready(function(){
+	if (typeof $.fn.bootstrapTable === 'undefined') {
+		layer.alert('表格组件未加载，请 Ctrl+F5 强刷页面；若仍失败请检查 /static/js/bootstrap-table-1.21.4.min.js 是否可访问', {icon:2});
+		return;
+	}
 	updateToolbar();
 	const pageSizeKey = 'user_pagesize';
 	const pageNumber = typeof window.$_GET['pageNumber'] != 'undefined' ? parseInt(window.$_GET['pageNumber']) : 1;
@@ -322,6 +326,10 @@ var CreatePassword = function (len)
 	return pass;
 }
 $(document).ready(function(){
+	if (typeof $.fn.bootstrapTable === 'undefined') {
+		layer.alert('表格组件未加载，请 Ctrl+F5 强刷页面；若仍失败请检查 /static/js/bootstrap-table-1.21.4.min.js 是否可访问', {icon:2});
+		return;
+	}
 	$("select[name=is_api]").change(function(){
 		if($(this).val() == 1){
 			$("#apikey_input").show();

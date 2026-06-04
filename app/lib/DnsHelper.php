@@ -719,12 +719,14 @@ class DnsHelper
                 'name' => $cfg['name'],
                 'icon' => $cfg['icon'],
                 'add' => $cfg['add'] ?? false,
+                'page' => $cfg['page'] ?? false,
             ];
         }
         return [
             'name' => $type ?: '未知',
             'icon' => 'dnspod.ico',
             'add' => false,
+            'page' => false,
         ];
     }
 

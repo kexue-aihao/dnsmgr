@@ -253,7 +253,11 @@ class Dmonitor extends BaseController
 
         $task['switch_count'] = $switch_count;
         $task['fail_count'] = $fail_count;
-        $task['pool_count'] = BackupPoolService::count($id);
+        try {
+            $task['pool_count'] = BackupPoolService::count($id);
+        } catch (\Throwable $e) {
+            $task['pool_count'] = 0;
+        }
         if ($task['type'] == 3) {
             $task['action_name'] = ['未知', '<font color="red">开启解析</font>', '<font color="green">暂停解析</font>'];
         } elseif ($task['type'] == 2) {
@@ -268,19 +272,26 @@ class Dmonitor extends BaseController
     public function tasklog_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
-        $taskid = input('param.id/d');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $action = input('post.action/d', 0);
+        try {
+            $taskid = input('param.id/d');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
+            }
+            $action = input('post.action/d', 0);
 
-        $select = Db::name('dmlog')->where('taskid', $taskid);
-        if ($action > 0) {
-            $select->where('action', $action);
+            $select = Db::name('dmlog')->where('taskid', $taskid);
+            if ($action > 0) {
+                $select->where('action', $action);
+            }
+            $total = (clone $select)->count();
+            $list = $select->order('id', 'desc')->limit($offset, $limit)->select();
+
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取切换日志失败：' . $e->getMessage()]);
         }
-        $total = $select->count();
-        $list = $select->order('id', 'desc')->limit($offset, $limit)->select();
-
-        return json(['total' => $total, 'rows' => $list]);
     }
 
     public function clean()
@@ -305,12 +316,16 @@ class Dmonitor extends BaseController
     public function pool_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
-        $taskId = input('param.id/d');
-        $list = BackupPoolService::list($taskId);
-        foreach ($list as &$row) {
-            $row['addtimestr'] = date('Y-m-d H:i:s', $row['addtime']);
+        try {
+            $taskId = input('param.id/d');
+            $list = BackupPoolService::list($taskId);
+            foreach ($list as &$row) {
+                $row['addtimestr'] = date('Y-m-d H:i:s', $row['addtime']);
+            }
+            return json(['total' => count($list), 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取备用IP池失败：' . $e->getMessage()]);
         }
-        return json(['total' => count($list), 'rows' => $list]);
     }
 
     public function pool_op()
