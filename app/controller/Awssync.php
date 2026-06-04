@@ -89,6 +89,27 @@ class Awssync extends BaseController
         }
     }
 
+    public function remote()
+    {
+        if (!checkPermission(2)) return json(['code' => -1, 'msg' => '无权限']);
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(120);
+        }
+        try {
+            $aws = new AwsSbService();
+            $accounts = $aws->getAccounts();
+            $instances = $aws->listAllInstances();
+            return json([
+                'code' => 0,
+                'accounts' => $accounts,
+                'instances' => $instances,
+                'total' => count($instances),
+            ]);
+        } catch (Exception $e) {
+            return json(['code' => -1, 'msg' => $e->getMessage()]);
+        }
+    }
+
     public function task()
     {
         if (!checkPermission(2)) return $this->alert('error', '无权限');

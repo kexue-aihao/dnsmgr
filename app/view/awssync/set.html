@@ -129,46 +129,64 @@ function saveSetting(obj){
 	return false;
 }
 var remoteInstances = [];
+function showAjaxError(xhr, textStatus){
+    var msg = '请求失败';
+    if (xhr && xhr.status) msg += ' (HTTP ' + xhr.status + ')';
+    if (xhr && xhr.responseJSON && xhr.responseJSON.msg) {
+        msg = xhr.responseJSON.msg;
+    } else if (xhr && xhr.responseText) {
+        var txt = xhr.responseText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (txt.indexOf('404') >= 0) {
+            msg = '接口不存在(404)，请先执行 update.sh 升级并清理 runtime/cache';
+        } else if (txt.length > 0) {
+            msg += '：' + (txt.length > 200 ? txt.substring(0, 200) + '...' : txt);
+        }
+    } else if (textStatus) {
+        msg += '：' + textStatus;
+    }
+    layer.alert(msg, {icon: 2});
+}
+function renderRemoteList(accounts, instances){
+    remoteInstances = instances || [];
+    $('#remoteSummary').html('共 <b>'+(accounts ? accounts.length : 0)+'</b> 个账号，<b>'+remoteInstances.length+'</b> 台 EC2 实例');
+    var html = '';
+    remoteInstances.forEach(function(row){
+        html += '<tr>'
+            + '<td>'+ (row.account_name || row.account_id) +'</td>'
+            + '<td>'+ row.region +'</td>'
+            + '<td>'+ row.instance_id +'</td>'
+            + '<td>'+ (row.name || '-') +'</td>'
+            + '<td>'+ (row.public_ip || '-') +'</td>'
+            + '</tr>';
+    });
+    $('#remoteTable tbody').html(html);
+    $('#remoteTable').toggle(remoteInstances.length > 0);
+    var opts = '<option value="">-- 选择实例进行连接测试 --</option>';
+    remoteInstances.forEach(function(row, idx){
+        opts += '<option value="'+idx+'">'+ row.instance_id +' | '+ row.region +' | '+ (row.public_ip || '无IP') +' | '+ (row.account_name || row.account_id) +'</option>';
+    });
+    $('#test_instance_pick').html(opts);
+}
 function loadRemoteList(){
-	var ii = layer.load(2, {shade:[0.1,'#fff']});
-	$.when(
-		$.post('/awssync/accounts', {}, null, 'json'),
-		$.post('/awssync/instances', {}, null, 'json')
-	).done(function(accRes, instRes){
-		layer.close(ii);
-		var accounts = (accRes[0] && accRes[0].code == 0) ? accRes[0].data : [];
-		var instances = (instRes[0] && instRes[0].code == 0) ? instRes[0].data : [];
-		if((!accRes[0] || accRes[0].code != 0) && accRes[0]){
-			layer.alert(accRes[0].msg || '读取账号失败', {icon:2});
-			return;
-		}
-		if((!instRes[0] || instRes[0].code != 0) && instRes[0]){
-			layer.alert(instRes[0].msg || '读取实例失败', {icon:2});
-			return;
-		}
-		remoteInstances = instances;
-		$('#remoteSummary').html('共 <b>'+accounts.length+'</b> 个账号，<b>'+instances.length+'</b> 台 EC2 实例');
-		var html = '';
-		instances.forEach(function(row){
-			html += '<tr>'
-				+ '<td>'+ (row.account_name || row.account_id) +'</td>'
-				+ '<td>'+ row.region +'</td>'
-				+ '<td>'+ row.instance_id +'</td>'
-				+ '<td>'+ (row.name || '-') +'</td>'
-				+ '<td>'+ (row.public_ip || '-') +'</td>'
-				+ '</tr>';
-		});
-		$('#remoteTable tbody').html(html);
-		$('#remoteTable').toggle(instances.length > 0);
-		var opts = '<option value="">-- 选择实例进行连接测试 --</option>';
-		instances.forEach(function(row, idx){
-			opts += '<option value="'+idx+'">'+ row.instance_id +' | '+ row.region +' | '+ (row.public_ip || '无IP') +' | '+ (row.account_name || row.account_id) +'</option>';
-		});
-		$('#test_instance_pick').html(opts);
-	}).fail(function(){
-		layer.close(ii);
-		layer.msg('服务器错误');
-	});
+    var ii = layer.load(2, {shade:[0.1,'#fff']});
+    $.ajax({
+        type: 'POST',
+        url: '/awssync/remote',
+        dataType: 'json',
+        timeout: 120000,
+        success: function(res){
+            layer.close(ii);
+            if(res.code != 0){
+                layer.alert(res.msg || '读取失败', {icon:2});
+                return;
+            }
+            renderRemoteList(res.accounts || [], res.instances || []);
+        },
+        error: function(xhr, textStatus){
+            layer.close(ii);
+            showAjaxError(xhr, textStatus);
+        }
+    });
 }
 $('#test_instance_pick').on('change', function(){
 	var idx = $(this).val();

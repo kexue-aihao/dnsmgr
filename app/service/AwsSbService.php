@@ -115,8 +115,12 @@ class AwsSbService
         $seen = [];
 
         $tryRegions = [''];
-        foreach ($this->getRegions($accountId) as $region) {
-            $tryRegions[] = $region;
+        try {
+            foreach ($this->getRegions($accountId) as $region) {
+                $tryRegions[] = $region;
+            }
+        } catch (Exception $e) {
+            // 部分账号可能无法读取 regions，仍尝试不带 region 拉取
         }
         $tryRegions = array_values(array_unique($tryRegions));
 
@@ -195,7 +199,7 @@ class AwsSbService
         }
         $data = json_decode($raw, true);
         if ($resp->getStatusCode() >= 400) {
-            $msg = is_array($data) ? ($data['detail'] ?? $data['msg'] ?? $data['message'] ?? $raw) : $raw;
+            $msg = is_array($data) ? ($data['detail'] ?? $data['error'] ?? $data['msg'] ?? $data['message'] ?? $raw) : $raw;
             if (is_array($msg)) {
                 $msg = json_encode($msg, JSON_UNESCAPED_UNICODE);
             }
@@ -212,7 +216,7 @@ class AwsSbService
         if ($data === []) {
             return [];
         }
-        if (array_is_list($data)) {
+        if (self::isListArray($data)) {
             return $data;
         }
         foreach (['accounts', 'instances', 'regions', 'data', 'items', 'list', 'results'] as $key) {
@@ -223,13 +227,28 @@ class AwsSbService
         return [$data];
     }
 
+    private static function isListArray(array $data): bool
+    {
+        if ($data === []) {
+            return true;
+        }
+        return array_keys($data) === range(0, count($data) - 1);
+    }
+
     private static function parseAccount(array $row): ?array
     {
-        $id = $row['account_id'] ?? $row['id'] ?? $row['AccountId'] ?? null;
+        $id = $row['account_id'] ?? $row['id'] ?? $row['AccountId'] ?? $row['accountId'] ?? null;
+        $name = $row['name'] ?? $row['account_name'] ?? $row['label'] ?? $row['remark'] ?? null;
+        if (($id === null || $id === '') && is_string($name) && str_contains($name, '+')) {
+            $parts = explode('+', $name, 2);
+            $id = $parts[1] ?? null;
+        }
         if ($id === null || $id === '') {
             return null;
         }
-        $name = $row['name'] ?? $row['account_name'] ?? $row['label'] ?? $row['remark'] ?? $id;
+        if ($name === null || $name === '') {
+            $name = $id;
+        }
         return [
             'id' => (string)$id,
             'name' => (string)$name,

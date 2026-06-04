@@ -11,9 +11,10 @@
 #   DNSMGR_REPO=https://github.com/kexue-aihao/dnsmgr.git
 #   DNSMGR_BRANCH=master
 #   DNSMGR_SITE_DIR=/path/to/site   默认=脚本所在目录
-#   DNSMGR_WEB_USER=www             文件所有者
+#   DNSMGR_WEB_USER=www             文件所有者（不存在时自动检测）
 #   DNSMGR_DRY_RUN=1                只预览不写入
 #   DNSMGR_SKIP_COMPOSER=1          跳过 composer install
+#   DNSMGR_RELOAD_PHP=1             升级后尝试 reload php-fpm
 #
 
 set -euo pipefail
@@ -24,6 +25,7 @@ SITE_DIR="${DNSMGR_SITE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 WEB_USER="${DNSMGR_WEB_USER:-www}"
 DRY_RUN="${DNSMGR_DRY_RUN:-0}"
 SKIP_COMPOSER="${DNSMGR_SKIP_COMPOSER:-0}"
+RELOAD_PHP="${DNSMGR_RELOAD_PHP:-0}"
 TMP_DIR=""
 BACKUP_ENV=""
 
@@ -55,6 +57,31 @@ read_env_value() {
   echo "$line" | cut -d'=' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -d '\r'
 }
 
+detect_web_user() {
+  if id "$WEB_USER" >/dev/null 2>&1; then
+    return 0
+  fi
+  local u
+  for u in www www-data nginx apache; do
+    if id "$u" >/dev/null 2>&1; then
+      WEB_USER="$u"
+      ok "自动检测到 Web 用户: $WEB_USER"
+      return 0
+    fi
+  done
+  if [[ -d "$SITE_DIR/runtime" ]]; then
+    local owner
+    owner=$(stat -c '%U' "$SITE_DIR/runtime" 2>/dev/null || stat -f '%Su' "$SITE_DIR/runtime" 2>/dev/null || true)
+    if [[ -n "$owner" && "$owner" != "root" ]] && id "$owner" >/dev/null 2>&1; then
+      WEB_USER="$owner"
+      ok "从 runtime 目录推断 Web 用户: $WEB_USER"
+      return 0
+    fi
+  fi
+  warn "未找到可用 Web 用户（当前: $WEB_USER），runtime 权限可能需手动 chown"
+  return 1
+}
+
 mysql_exec() {
   local sql=$1
   if [[ "$DRY_RUN" == "1" ]]; then
@@ -65,6 +92,17 @@ mysql_exec() {
     -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" "$DB_NAME" \
     --default-character-set=utf8mb4 \
     -e "$sql"
+}
+
+mysql_scalar() {
+  local sql=$1
+  if [[ "$DRY_RUN" == "1" ]]; then
+    echo 0
+    return 0
+  fi
+  MYSQL_PWD="$DB_PASS" mysql -N -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" "$DB_NAME" \
+    --default-character-set=utf8mb4 \
+    -e "$sql" 2>/dev/null | head -1
 }
 
 mysql_exec_file() {
@@ -82,6 +120,21 @@ mysql_exec_file() {
     --force \
     < "$tmp_sql" || true
   rm -f "$tmp_sql"
+}
+
+table_exists() {
+  local table="${DB_PREFIX}$1"
+  local count
+  count=$(mysql_scalar "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}' AND table_name='${table}'" || echo 0)
+  [[ "${count:-0}" -gt 0 ]]
+}
+
+column_exists() {
+  local table="${DB_PREFIX}$1"
+  local col=$2
+  local count
+  count=$(mysql_scalar "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='${DB_NAME}' AND table_name='${table}' AND column_name='${col}'" || echo 0)
+  [[ "${count:-0}" -gt 0 ]]
 }
 
 migration_applied() {
@@ -136,6 +189,51 @@ apply_migrations() {
   done
 }
 
+ensure_core_schema() {
+  log "检查核心表结构（域名/账户列表依赖）..."
+
+  if ! table_exists "account"; then
+    die "表 ${DB_PREFIX}account 不存在，请先完成 dnsmgr 安装"
+  fi
+  if ! table_exists "domain"; then
+    die "表 ${DB_PREFIX}domain 不存在，请先完成 dnsmgr 安装"
+  fi
+
+  if ! table_exists "domain_category"; then
+    warn "缺少 ${DB_PREFIX}domain_category，正在补建..."
+    mysql_exec "CREATE TABLE IF NOT EXISTS \`${DB_PREFIX}domain_category\` (
+      \`id\` int(11) unsigned NOT NULL AUTO_INCREMENT,
+      \`name\` varchar(50) NOT NULL,
+      \`remark\` varchar(100) DEFAULT NULL,
+      \`sort\` int(11) NOT NULL DEFAULT '0',
+      \`addtime\` datetime DEFAULT NULL,
+      PRIMARY KEY (\`id\`),
+      KEY \`sort\` (\`sort\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+    ok "已创建 ${DB_PREFIX}domain_category"
+  fi
+
+  if ! column_exists "domain" "cid"; then
+    warn "缺少 ${DB_PREFIX}domain.cid，正在补加..."
+    mysql_exec "ALTER TABLE \`${DB_PREFIX}domain\` ADD COLUMN \`cid\` int(11) unsigned NOT NULL DEFAULT '0'" || true
+    mysql_exec "ALTER TABLE \`${DB_PREFIX}domain\` ADD KEY \`cid\` (\`cid\`)" || true
+    ok "已补加 ${DB_PREFIX}domain.cid"
+  fi
+
+  if ! column_exists "account" "name" && column_exists "account" "ak"; then
+    warn "检测到旧版 account 表结构(ak)，正在迁移为 name/config..."
+    mysql_exec "ALTER TABLE \`${DB_PREFIX}account\` ADD COLUMN \`config\` text DEFAULT NULL" || true
+    mysql_exec "ALTER TABLE \`${DB_PREFIX}account\` CHANGE COLUMN \`ak\` \`name\` varchar(255) NOT NULL" || true
+    ok "account 表结构已更新"
+  fi
+
+  if ! column_exists "account" "config"; then
+    warn "缺少 ${DB_PREFIX}account.config，正在补加..."
+    mysql_exec "ALTER TABLE \`${DB_PREFIX}account\` ADD COLUMN \`config\` text DEFAULT NULL" || true
+    ok "已补加 ${DB_PREFIX}account.config"
+  fi
+}
+
 sync_files() {
   local src=$1
   local excludes=(
@@ -143,10 +241,7 @@ sync_files() {
     --exclude=.git
     --exclude=.gitignore
     --exclude=vendor/
-    --exclude=runtime/cache/
-    --exclude=runtime/log/
-    --exclude=runtime/session/
-    --exclude=runtime/temp/
+    --exclude=runtime/
     --exclude=upgrade-backup-pool/
     --exclude=upgrade-aws-sync/
   )
@@ -167,6 +262,7 @@ sync_files() {
 
 prepare_runtime() {
   local dirs=(runtime runtime/cache runtime/log runtime/session runtime/temp)
+  local d
   for d in "${dirs[@]}"; do
     mkdir -p "$SITE_DIR/$d"
   done
@@ -175,12 +271,80 @@ prepare_runtime() {
     return 0
   fi
 
-  rm -rf "$SITE_DIR/runtime/cache/"*
-  find "$SITE_DIR/runtime/cache" -type f -name "*.php" -delete 2>/dev/null || true
+  # 完整清理 ThinkPHP 缓存（含 fields/schema 缓存，避免 /domain/data /account/data 500）
+  rm -rf "$SITE_DIR/runtime/cache/"* "$SITE_DIR/runtime/temp/"* 2>/dev/null || true
+  find "$SITE_DIR/runtime/cache" "$SITE_DIR/runtime/temp" -mindepth 1 -delete 2>/dev/null || true
 
+  detect_web_user || true
   if id "$WEB_USER" >/dev/null 2>&1; then
-    chown -R "$WEB_USER:$WEB_USER" "$SITE_DIR/runtime" 2>/dev/null || warn "chown runtime 失败，请手动检查权限"
+    chown -R "$WEB_USER:$WEB_USER" "$SITE_DIR/runtime" 2>/dev/null || warn "chown runtime 失败，请手动: chown -R $WEB_USER:$WEB_USER runtime"
     chmod -R 775 "$SITE_DIR/runtime" 2>/dev/null || true
+    ok "runtime 目录权限已修复 ($WEB_USER)"
+  fi
+}
+
+fix_public_permissions() {
+  [[ "$DRY_RUN" == "1" ]] && return 0
+  detect_web_user || true
+  if id "$WEB_USER" >/dev/null 2>&1; then
+    if [[ -d "$SITE_DIR/public/static" ]]; then
+      chown -R "$WEB_USER:$WEB_USER" "$SITE_DIR/public/static" 2>/dev/null || true
+    fi
+    chmod -R a+rX "$SITE_DIR/public/static" 2>/dev/null || true
+  fi
+}
+
+invalidate_opcache() {
+  [[ "$DRY_RUN" == "1" ]] && return 0
+  touch "$SITE_DIR/public/index.php" 2>/dev/null || true
+  if [[ "$RELOAD_PHP" == "1" ]]; then
+    if command -v systemctl >/dev/null 2>&1; then
+      for svc in php-fpm php8.2-fpm php8.1-fpm php8.0-fpm php-fpm74; do
+        if systemctl is-active --quiet "$svc" 2>/dev/null; then
+          systemctl reload "$svc" && ok "已 reload $svc" && return 0
+        fi
+      done
+    fi
+    warn "未找到可 reload 的 php-fpm 服务，可手动 reload 或设 DNSMGR_RELOAD_PHP=0"
+  fi
+}
+
+verify_upgrade() {
+  local assets=(
+    public/static/js/jquery-3.7.1.min.js
+    public/static/js/bootstrap-table-1.21.4.min.js
+    public/static/js/custom.js
+    public/static/css/bootstrap-table.css
+    route/app.php
+    app/controller/Domain.php
+  )
+  local missing=0 f
+  for f in "${assets[@]}"; do
+    if [[ ! -f "$SITE_DIR/$f" ]]; then
+      warn "缺少关键文件: $f（列表页可能空白）"
+      missing=1
+    fi
+  done
+  [[ "$missing" -eq 0 ]] && ok "关键程序/静态文件检查通过"
+
+  if [[ "$DRY_RUN" == "1" ]]; then
+    return 0
+  fi
+
+  local acct_cnt domain_cnt
+  acct_cnt=$(mysql_scalar "SELECT COUNT(*) FROM \`${DB_PREFIX}account\`" || echo 0)
+  domain_cnt=$(mysql_scalar "SELECT COUNT(*) FROM \`${DB_PREFIX}domain\`" || echo 0)
+  log "数据库统计: ${acct_cnt:-0} 个域名账户, ${domain_cnt:-0} 个域名"
+
+  if [[ "${acct_cnt:-0}" -eq 0 && "${domain_cnt:-0}" -eq 0 ]]; then
+    warn "账户/域名数量均为 0；若升级前本有数据，请检查 .env 中 DATABASE/PREFIX 是否正确"
+  fi
+
+  if ! column_exists "domain" "cid"; then
+    warn "domain.cid 仍缺失，域名列表 API 可能报错"
+  fi
+  if ! table_exists "domain_category"; then
+    warn "domain_category 仍缺失，域名分类筛选可能报错"
   fi
 }
 
@@ -239,11 +403,7 @@ main() {
 
   TMP_DIR=$(mktemp -d)
   log "克隆/更新仓库到临时目录 ..."
-  if [[ "$DRY_RUN" == "1" ]]; then
-    git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TMP_DIR/src"
-  else
-    git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TMP_DIR/src"
-  fi
+  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TMP_DIR/src"
   ok "仓库拉取完成: $(git -C "$TMP_DIR/src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
   log "同步程序文件 ..."
@@ -257,9 +417,15 @@ main() {
 
   prepare_runtime
   apply_migrations
+  ensure_core_schema
   run_composer
+  fix_public_permissions
+  invalidate_opcache
+  verify_upgrade
 
   log "========== dnsmgr 升级完成 =========="
+  log "若域名/账户列表仍空白: 浏览器 Ctrl+F5 强刷；F12 看 /domain/data 与 /account/data 是否 200"
+  log "若仍 500: 查看 runtime/log/ 下最新日志；确认 runtime 归属 $WEB_USER 且可写"
   log "建议: 登录面板 -> 清理缓存；检查 计划任务 / 容灾切换 / AWS IP同步 是否正常"
   if [[ -n "$BACKUP_ENV" && -f "$BACKUP_ENV" ]]; then
     log ".env 备份仍保留在: $BACKUP_ENV （确认无误后可手动删除）"
