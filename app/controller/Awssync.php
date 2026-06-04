@@ -46,6 +46,19 @@ class Awssync extends BaseController
             $instanceId = $task['aws_instance_id'];
         }
 
+        if ($region === '' && $accountId !== '') {
+            $aws = new AwsSbService();
+            foreach ($aws->getAccounts() as $acc) {
+                if ($acc['id'] === $accountId) {
+                    $region = \app\service\AwsRegionResolver::resolve('', null, $acc['name']);
+                    break;
+                }
+            }
+        }
+        if ($region === '') {
+            return json(['code' => -1, 'msg' => 'Region 不能为空，请从实例列表选择或手动填写']);
+        }
+
         try {
             $ip = (new AwsSbService())->getInstancePublicIp($accountId, $region, $instanceId);
             return json(['code' => 0, 'msg' => '连接成功，当前公网 IP：' . $ip, 'ip' => $ip]);

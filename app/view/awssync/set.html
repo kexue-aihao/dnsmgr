@@ -188,8 +188,8 @@ function renderRemoteList(accounts, instances, accountLabel){
     }
     $('#remoteSummary').html(summary);
     var html = '';
-    remoteInstances.forEach(function(row){
-        html += '<tr>'
+    remoteInstances.forEach(function(row, idx){
+        html += '<tr class="remote-instance-row" data-idx="'+idx+'" style="cursor:pointer;" title="点击填充下方连接测试">'
             + '<td>'+ (row.account_name || row.account_id) +'</td>'
             + '<td>'+ row.region +'</td>'
             + '<td>'+ row.instance_id +'</td>'
@@ -204,6 +204,12 @@ function renderRemoteList(accounts, instances, accountLabel){
         opts += '<option value="'+idx+'">'+ row.instance_id +' | '+ row.region +' | '+ (row.public_ip || '无IP') +' | '+ (row.account_name || row.account_id) +'</option>';
     });
     $('#test_instance_pick').html(opts);
+}
+function fillTestFromInstance(row){
+    if(!row) return;
+    $('#test_account_id').val(row.account_id || '');
+    $('#test_instance_id').val(row.instance_id || '');
+    $('#test_region').val(row.region || '');
 }
 function loadAccounts(){
     closeLoading();
@@ -283,11 +289,13 @@ $('#remote_account_pick').on('change', function(){
 $('#test_instance_pick').on('change', function(){
 	var idx = $(this).val();
 	if(idx === '') return;
-	var row = remoteInstances[idx];
-	if(!row) return;
-	$('#test_account_id').val(row.account_id);
-	$('#test_region').val(row.region);
-	$('#test_instance_id').val(row.instance_id);
+	fillTestFromInstance(remoteInstances[idx]);
+});
+$('#remoteTable tbody').on('click', 'tr.remote-instance-row', function(){
+	var idx = $(this).data('idx');
+	if(idx === undefined || idx === '') return;
+	$('#test_instance_pick').val(String(idx));
+	fillTestFromInstance(remoteInstances[idx]);
 });
 function testAws(){
 	var ii = layer.load(2, {shade:[0.1,'#fff']});

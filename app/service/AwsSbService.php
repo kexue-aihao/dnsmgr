@@ -124,11 +124,12 @@ class AwsSbService
         $result = [];
         $seen = [];
         $deadline = time() + max(3, $timeBudgetSec);
+        $hintRegion = AwsRegionResolver::resolveFromAccountName($accountName) ?: '';
 
         // 优先不带 region 拉取（通常最快）
         try {
             foreach ($this->fetchEc2Instances($accountId, '') as $row) {
-                $item = self::parseInstance($row, $accountId, $accountName, '');
+                $item = self::parseInstance($row, $accountId, $accountName, $hintRegion);
                 if (!$item || isset($seen[$item['instance_id']])) {
                     continue;
                 }
@@ -143,6 +144,9 @@ class AwsSbService
         }
 
         $tryRegions = [];
+        if ($hintRegion !== '') {
+            $tryRegions[] = $hintRegion;
+        }
         try {
             foreach ($this->getRegions($accountId) as $region) {
                 if ($region !== '') {
@@ -152,6 +156,7 @@ class AwsSbService
         } catch (Exception $e) {
             // 部分账号可能无法读取 regions
         }
+        $tryRegions = array_values(array_unique($tryRegions));
 
         foreach ($tryRegions as $region) {
             if (time() >= $deadline) {
@@ -297,15 +302,17 @@ class AwsSbService
         if ($id === null || !preg_match('/^i-[0-9a-f]+$/i', (string)$id)) {
             return null;
         }
-        $region = $row['region_name'] ?? $row['region'] ?? $row['RegionName'] ?? $fallbackRegion;
+        $publicIp = self::extractPublicIp($row) ?: '';
+        $rawRegion = $row['region_name'] ?? $row['region'] ?? $row['RegionName'] ?? $fallbackRegion;
+        $region = AwsRegionResolver::resolve((string)$rawRegion, $publicIp, $accountName);
         $name = $row['name'] ?? $row['instance_name'] ?? $row['InstanceName'] ?? (string)$id;
         return [
             'account_id' => $accountId,
             'account_name' => $accountName,
             'instance_id' => (string)$id,
-            'region' => (string)$region,
+            'region' => $region,
             'name' => (string)$name,
-            'public_ip' => self::extractPublicIp($row) ?: '',
+            'public_ip' => $publicIp,
         ];
     }
 

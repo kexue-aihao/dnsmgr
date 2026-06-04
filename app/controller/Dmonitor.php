@@ -39,11 +39,15 @@ class Dmonitor extends BaseController
     public function task_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
+        try {
         $type = input('post.type/d', 1);
         $status = input('post.status', null);
         $kw = input('post.kw', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
+        $offset = input('post.offset/d', 0);
+        $limit = input('post.limit/d', 15);
+        if ($limit <= 0) {
+            $limit = 15;
+        }
         $sort = input('post.sortName', null, 'trim');
         $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
@@ -64,7 +68,7 @@ class Dmonitor extends BaseController
         if (!isNullOrEmpty($status)) {
             $select->where('status', intval($status));
         }
-        $total = $select->count();
+        $total = (clone $select)->count();
         $allowedSort = ['id' => 'A.id', 'rr' => 'A.rr', 'main_value' => 'A.main_value', 'type' => 'A.type', 'checktype' => 'A.checktype', 'frequency' => 'A.frequency', 'status' => 'A.status', 'active' => 'A.active', 'checktimestr' => 'A.checktime', 'addtimestr' => 'A.addtime', 'remark' => 'A.remark'];
         if ($sort && isset($allowedSort[$sort])) {
             $select->order($allowedSort[$sort], $orderDir);
@@ -76,10 +80,17 @@ class Dmonitor extends BaseController
         foreach ($list as &$row) {
             $row['addtimestr'] = date('Y-m-d H:i:s', $row['addtime']);
             $row['checktimestr'] = $row['checktime'] > 0 ? date('Y-m-d H:i:s', $row['checktime']) : '未运行';
-            $row['pool_count'] = BackupPoolService::count($row['id']);
+            try {
+                $row['pool_count'] = BackupPoolService::count($row['id']);
+            } catch (\Throwable $e) {
+                $row['pool_count'] = 0;
+            }
         }
 
         return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取切换策略失败：' . $e->getMessage()]);
+        }
     }
 
     public function task_op()
