@@ -61,9 +61,13 @@
 <script src="/static/js/bootstrap-table-1.21.4.min.js"></script>
 <script src="/static/js/bootstrap-table-page-jump-to-1.21.4.min.js"></script>
 <script src="/static/js/bootstrapValidator.min.js"></script>
-<script src="/static/js/custom.js?v=1006"></script>
+<script src="/static/js/custom.js?v=1007"></script>
 <script>
 $(document).ready(function(){
+	if (typeof $.fn.bootstrapTable === 'undefined') {
+		layer.alert('表格组件未加载，请 Ctrl+F5 强刷页面；若仍失败请检查 /static/js/bootstrap-table-1.21.4.min.js 是否可访问', {icon:2});
+		return;
+	}
 	updateToolbar();
 	const pageSizeKey = 'category_pagesize';
 	const pageNumber = typeof window.$_GET['pageNumber'] != 'undefined' ? parseInt(window.$_GET['pageNumber']) : 1;
@@ -132,7 +136,17 @@ $(document).ready(function(){
 		},
 	});
 
-	$("#form-store").bootstrapValidator();
+	if ($.fn.bootstrapValidator) {
+		$("#form-store").bootstrapValidator({
+			fields: {
+				name: {
+					validators: {
+						notEmpty: { message: '分类名称不能为空' }
+					}
+				}
+			}
+		});
+	}
 });
 
 function addframe(){
@@ -142,7 +156,9 @@ function addframe(){
 	$("#form-store input[name=name]").val('');
 	$("#form-store input[name=sort]").val('0');
 	$("#form-store input[name=remark]").val('');
-	$("#form-store").data("bootstrapValidator").resetForm();
+	if ($("#form-store").data("bootstrapValidator")) {
+		$("#form-store").data("bootstrapValidator").resetForm();
+	}
 }
 
 function editframe(id){
@@ -153,12 +169,20 @@ function editframe(id){
 	$("#form-store input[name=name]").val(row.name);
 	$("#form-store input[name=sort]").val(row.sort);
 	$("#form-store input[name=remark]").val(row.remark);
-	$("#form-store").data("bootstrapValidator").resetForm();
+	if ($("#form-store").data("bootstrapValidator")) {
+		$("#form-store").data("bootstrapValidator").resetForm();
+	}
 }
 
 function save(){
-	$("#form-store").data("bootstrapValidator").validate();
-	if(!$("#form-store").data("bootstrapValidator").isValid()){
+	var bv = $("#form-store").data("bootstrapValidator");
+	if (bv) {
+		bv.validate();
+		if (!bv.isValid()) {
+			return;
+		}
+	} else if (!$("#form-store input[name=name]").val().trim()) {
+		layer.msg('分类名称不能为空', {icon: 2});
 		return;
 	}
 	var id = $("#form-store input[name=id]").val();

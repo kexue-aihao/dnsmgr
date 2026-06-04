@@ -1410,26 +1410,37 @@ class Domain extends BaseController
     public function category_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
-        $offset = input('post.offset/d', 0);
-        $limit = input('post.limit/d', 10);
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
+        try {
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
+            }
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $select = Db::name('domain_category');
-        $total = $select->count();
-        $allowedSort = ['id' => 'id', 'name' => 'name', 'remark' => 'remark', 'sort' => 'sort', 'addtime' => 'addtime'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('id', 'desc');
+            $select = Db::name('domain_category');
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'id', 'name' => 'name', 'remark' => 'remark', 'sort' => 'sort', 'addtime' => 'addtime'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('id', 'desc');
+            }
+            $rows = $select->limit($offset, $limit)->select()->toArray();
+
+            foreach ($rows as &$row) {
+                try {
+                    $row['domain_count'] = Db::name('domain')->where('cid', $row['id'])->count();
+                } catch (\Throwable $e) {
+                    $row['domain_count'] = 0;
+                }
+            }
+
+            return json(['total' => $total, 'rows' => $rows]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取分类列表失败：' . $e->getMessage()]);
         }
-        $rows = $select->limit($offset, $limit)->select()->toArray();
-
-        foreach ($rows as &$row) {
-            $row['domain_count'] = Db::name('domain')->where('cid', $row['id'])->count();
-        }
-
-        return json(['total' => $total, 'rows' => $rows]);
     }
 
     public function category_op()
@@ -1470,8 +1481,12 @@ class Domain extends BaseController
             return json(['code' => 0, 'msg' => '修改分类成功！']);
         } elseif ($action == 'del') {
             $id = input('post.id/d');
-            $count = Db::name('domain')->where('cid', $id)->count();
-            if ($count > 0) return json(['code' => -1, 'msg' => '该分类下存在域名，无法删除']);
+            try {
+                $count = Db::name('domain')->where('cid', $id)->count();
+                if ($count > 0) return json(['code' => -1, 'msg' => '该分类下存在域名，无法删除']);
+            } catch (\Throwable $e) {
+                // domain.cid 未迁移时仍允许删除空分类
+            }
             Db::name('domain_category')->where('id', $id)->delete();
             return json(['code' => 0, 'msg' => '删除分类成功！']);
         }
@@ -1481,11 +1496,19 @@ class Domain extends BaseController
     public function category_list()
     {
         if (!checkPermission(2)) return json(['code' => -1, 'msg' => '无权限']);
-        $list = Db::name('domain_category')->order('sort', 'asc')->order('id', 'desc')->select();
-        foreach ($list as &$row) {
-            $row['domain_count'] = Db::name('domain')->where('cid', $row['id'])->count();
+        try {
+            $list = Db::name('domain_category')->order('sort', 'asc')->order('id', 'desc')->select();
+            foreach ($list as &$row) {
+                try {
+                    $row['domain_count'] = Db::name('domain')->where('cid', $row['id'])->count();
+                } catch (\Throwable $e) {
+                    $row['domain_count'] = 0;
+                }
+            }
+            return json(['code' => 0, 'data' => $list]);
+        } catch (\Throwable $e) {
+            return json(['code' => -1, 'msg' => '读取分类列表失败：' . $e->getMessage()]);
         }
-        return json(['code' => 0, 'data' => $list]);
     }
 
     public function domain_set_category()
