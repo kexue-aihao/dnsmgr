@@ -288,20 +288,33 @@ class Awssync extends BaseController
     {
         if (!checkPermission(2)) return $this->alert('error', '无权限');
         $action = input('param.action');
+        if (!in_array($action, ['add', 'edit'], true)) {
+            return $this->alert('error', '无效操作');
+        }
         $task = null;
         if ($action == 'edit') {
             $id = input('get.id/d');
-            $task = Db::name('aws_sync')->where('id', $id)->find();
+            try {
+                $task = Db::name('aws_sync')->where('id', $id)->find();
+            } catch (\Throwable $e) {
+                return $this->alert('error', '读取任务失败：' . $e->getMessage());
+            }
             if (empty($task)) return $this->alert('error', '任务不存在');
         }
 
         $domains = [];
-        $domainList = Db::name('domain')->alias('A')->join('account B', 'A.aid = B.id')->field('A.id,A.name,B.type')->select();
-        foreach ($domainList as $row) {
-            $domains[] = ['id' => $row['id'], 'name' => $row['name'], 'type' => $row['type']];
+        try {
+            $domainList = Db::name('domain')->alias('A')->join('account B', 'A.aid = B.id')->field('A.id,A.name,B.type')->select();
+            foreach ($domainList as $row) {
+                $domains[] = ['id' => $row['id'], 'name' => $row['name'], 'type' => $row['type']];
+            }
+        } catch (\Throwable $e) {
+            return $this->alert('error', '读取域名列表失败：' . $e->getMessage());
         }
         View::assign('domains', $domains);
         View::assign('info', $task);
+        View::assign('infoJson', json_encode($task, JSON_UNESCAPED_UNICODE) ?: 'null');
+        View::assign('domainsJson', json_encode($domains, JSON_UNESCAPED_UNICODE) ?: '[]');
         View::assign('action', $action);
         return View::fetch();
     }

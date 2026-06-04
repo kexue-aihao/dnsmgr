@@ -14,6 +14,9 @@
 <div class="panel panel-default">
 <div class="panel-heading"><h3 class="panel-title"><a href="/awssync/task" class="btn btn-sm btn-default pull-right" style="margin-top:-6px"><i class="fa fa-reply fa-fw"></i> 返回</a>{if $action=='edit'}编辑{else}添加{/if} AWS IP同步任务</h3></div>
 <div class="panel-body">
+  {if empty($domains)}
+  <div class="alert alert-warning">暂无可用域名，请先在 <a href="/domain">域名管理</a> 中添加域名后再创建同步任务。</div>
+  {/if}
   <form onsubmit="return false" method="post" class="form-horizontal" role="form" id="taskform">
     <div class="form-group">
         <label class="col-sm-3 control-label no-padding-right" is-required>域名选择</label>
@@ -113,10 +116,10 @@
 {/block}
 {block name="script"}
 <script src="/static/js/layer/layer.js"></script>
-<script src="/static/js/vue.min.js"></script>
+<script src="/static/js/vue-2.7.16.min.js"></script>
 <script>
-var info = {$info|json_encode|raw};
-var domainList = {$domains|json_encode|raw};
+var info = {$infoJson|raw};
+var domainList = {$domainsJson|raw};
 new Vue({
     el: '#app',
     data: {
