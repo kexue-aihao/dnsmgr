@@ -102,8 +102,13 @@ class AwsSbService
             if (time() >= $deadline) {
                 break;
             }
+            $aid = trim((string)($account['id'] ?? ''));
+            if ($aid === '') {
+                continue;
+            }
             $remaining = max(3, $deadline - time());
-            foreach ($this->listInstancesByAccount($account['id'], $account['name'], $remaining) as $item) {
+            $name = (string)($account['name'] ?? $aid);
+            foreach ($this->listInstancesByAccount($aid, $name, $remaining) as $item) {
                 $all[$item['instance_id']] = $item;
             }
         }
