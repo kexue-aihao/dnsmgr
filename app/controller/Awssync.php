@@ -7,6 +7,7 @@ use Exception;
 use think\facade\Cache;
 use think\facade\Db;
 use think\facade\View;
+use app\lib\DnsHelper;
 use app\service\AwsSbService;
 use app\service\AwsSyncService;
 
@@ -130,6 +131,84 @@ class Awssync extends BaseController
         } catch (Exception $e) {
             return json(['code' => -1, 'msg' => $e->getMessage()]);
         }
+    }
+
+    public function domain_records()
+    {
+        if (!checkPermission(2)) return json(['code' => -1, 'msg' => '无权限']);
+        $id = input('post.did/d');
+        if (empty($id)) {
+            return json(['code' => -1, 'msg' => '请选择域名']);
+        }
+        try {
+            $drow = Db::name('domain')->where('id', $id)->find();
+            if (!$drow) {
+                return json(['code' => -1, 'msg' => '域名不存在']);
+            }
+            if (!checkPermission(0, $drow['name'])) {
+                return json(['code' => -1, 'msg' => '无权限']);
+            }
+
+            $dns = DnsHelper::getModel($drow['aid'], $drow['name'], $drow['thirdid']);
+            $recordLine = cache('record_line_' . $drow['id']);
+            if (empty($recordLine)) {
+                $recordLine = $dns->getRecordLine() ?: [];
+                if ($recordLine) {
+                    cache('record_line_' . $drow['id'], $recordLine, 604800);
+                }
+            }
+
+            $all = [];
+            $page = 1;
+            $pageSize = 300;
+            $total = 0;
+            do {
+                $result = $dns->getDomainRecords($page, $pageSize, null, null, null, 'A', null, null);
+                if ($result === false) {
+                    return json(['code' => -1, 'msg' => '获取解析记录失败：' . $dns->getError()]);
+                }
+                foreach ($result['list'] as $row) {
+                    if (strtoupper($row['Type'] ?? 'A') !== 'A') {
+                        continue;
+                    }
+                    $rr = $this->parseRecordRr($row['Name'] ?? '', $drow['name']);
+                    $value = $row['Value'] ?? '';
+                    if (is_array($value)) {
+                        $value = $value[0] ?? '';
+                    }
+                    $lineName = isset($recordLine[$row['Line']]) ? $recordLine[$row['Line']]['name'] : ($row['Line'] ?? '');
+                    $row['rr'] = $rr;
+                    $row['LineName'] = $lineName;
+                    $host = $rr === '@' ? $drow['name'] : $rr . '.' . $drow['name'];
+                    $row['display'] = $host . ' → ' . $value . '（' . $lineName . '）';
+                    $all[] = $row;
+                }
+                $total = (int)($result['total'] ?? count($all));
+                $page++;
+            } while (count($all) < $total && $page <= 10 && !empty($result['list']));
+
+            return json(['code' => 0, 'data' => $all, 'total' => count($all), 'domain' => $drow['name']]);
+        } catch (\Throwable $e) {
+            return json(['code' => -1, 'msg' => '读取解析记录失败：' . $e->getMessage()]);
+        }
+    }
+
+    private function parseRecordRr($name, $domainName)
+    {
+        $name = trim((string)$name);
+        if ($name === '' || $name === '@') {
+            return '@';
+        }
+        $name = rtrim(strtolower($name), '.');
+        $domain = rtrim(strtolower($domainName), '.');
+        if ($name === $domain) {
+            return '@';
+        }
+        $suffix = '.' . $domain;
+        if (strlen($name) > strlen($suffix) && substr($name, -strlen($suffix)) === $suffix) {
+            return substr($name, 0, -strlen($suffix));
+        }
+        return $name;
     }
 
     public function task()
@@ -304,9 +383,23 @@ class Awssync extends BaseController
 
         $domains = [];
         try {
-            $domainList = Db::name('domain')->alias('A')->join('account B', 'A.aid = B.id')->field('A.id,A.name,B.type')->select();
+            $domainList = Db::name('domain')->alias('A')->join('account B', 'A.aid = B.id')
+                ->field('A.id,A.name,A.remark,B.type')
+                ->order('A.id', 'desc')
+                ->select();
             foreach ($domainList as $row) {
-                $domains[] = ['id' => $row['id'], 'name' => $row['name'], 'type' => $row['type']];
+                $meta = DnsHelper::resolveTypeMeta($row['type'] ?? null);
+                $label = $row['name'] . '（' . $meta['name'] . '）';
+                if (!empty($row['remark'])) {
+                    $label .= ' - ' . $row['remark'];
+                }
+                $domains[] = [
+                    'id' => $row['id'],
+                    'name' => $row['name'],
+                    'type' => $row['type'],
+                    'typename' => $meta['name'],
+                    'label' => $label,
+                ];
             }
         } catch (\Throwable $e) {
             return $this->alert('error', '读取域名列表失败：' . $e->getMessage());
