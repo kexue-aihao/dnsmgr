@@ -268,7 +268,7 @@ ensure_core_schema() {
       \`aws_instance_id\` varchar(64) NOT NULL DEFAULT '',
       \`last_ip\` varchar(128) DEFAULT NULL,
       \`last_dns_ip\` varchar(128) DEFAULT NULL,
-      \`frequency\` int(11) NOT NULL DEFAULT 3,
+      \`frequency\` int(11) NOT NULL DEFAULT 10,
       \`checktime\` int(11) NOT NULL DEFAULT 0,
       \`checknexttime\` int(11) NOT NULL DEFAULT 0,
       \`sync_count\` int(11) NOT NULL DEFAULT 0,

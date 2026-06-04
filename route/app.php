@@ -28,6 +28,7 @@ Route::post('/auth/totp', 'auth/totp')->middleware(SessionInit::class);
 Route::get('/logout', 'auth/logout');
 Route::any('/quicklogin', 'auth/quicklogin');
 Route::any('/dmtask/status', 'dmonitor/status');
+Route::any('/awssync/status', 'awssync/status');
 Route::any('/optimizeip/status', 'optimizeip/status');
 Route::get('/cron', 'system/cron');
 

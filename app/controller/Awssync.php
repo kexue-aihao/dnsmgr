@@ -161,7 +161,20 @@ class Awssync extends BaseController
             'table_msg' => $tableMsg,
             'domain_count' => $domainCount,
             'task_count' => $taskCount,
+            'run_time' => config_get('aws_sync_run_time', null, true),
+            'run_state' => $this->daemonRunState(),
         ]);
+    }
+
+    public function status()
+    {
+        return $this->daemonRunState() ? 'ok' : 'error';
+    }
+
+    private function daemonRunState(): bool
+    {
+        $runTime = config_get('aws_sync_run_time', null, true);
+        return $runTime && (time() - strtotime($runTime) <= 10);
     }
 
     public function domain_records()
@@ -501,7 +514,7 @@ class Awssync extends BaseController
             'aws_account_id' => input('post.aws_account_id', null, 'trim'),
             'aws_region' => input('post.aws_region', null, 'trim'),
             'aws_instance_id' => input('post.aws_instance_id', null, 'trim'),
-            'frequency' => input('post.frequency/d', 3),
+            'frequency' => input('post.frequency/d', 10),
             'remark' => input('post.remark', null, 'trim'),
         ];
 
@@ -509,11 +522,11 @@ class Awssync extends BaseController
             || empty($task['aws_account_id']) || empty($task['aws_region']) || empty($task['aws_instance_id'])) {
             return ['code' => -1, 'msg' => '必填项不能为空'];
         }
-        if ($task['frequency'] < 1) {
-            return ['code' => -1, 'msg' => '同步间隔不能小于 1 分钟'];
+        if ($task['frequency'] < AwsSyncService::MIN_FREQUENCY) {
+            return ['code' => -1, 'msg' => '同步间隔不能小于 ' . AwsSyncService::MIN_FREQUENCY . ' 秒'];
         }
-        if ($task['frequency'] > 1440) {
-            return ['code' => -1, 'msg' => '同步间隔不能大于 1440 分钟'];
+        if ($task['frequency'] > AwsSyncService::MAX_FREQUENCY) {
+            return ['code' => -1, 'msg' => '同步间隔不能大于 ' . AwsSyncService::MAX_FREQUENCY . ' 秒'];
         }
         if (!preg_match('/^i-[0-9a-f]{8,20}$/i', $task['aws_instance_id'])) {
             return ['code' => -1, 'msg' => 'EC2 实例 ID 格式不正确（应以 i- 开头）'];

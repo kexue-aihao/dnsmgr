@@ -11,8 +11,19 @@ use app\lib\DnsHelper;
  */
 class AwsSyncService
 {
+    /** 检测间隔下限（秒） */
+    public const MIN_FREQUENCY = 10;
+
+    /** 检测间隔上限（秒，24 小时） */
+    public const MAX_FREQUENCY = 86400;
+
+    public static function calcNextCheckTime(int $frequency): int
+    {
+        return time() + max(self::MIN_FREQUENCY, min(self::MAX_FREQUENCY, $frequency));
+    }
+
     /**
-     * 计划任务批量执行
+     * 常驻进程批量执行
      */
     public function execute(): bool
     {
@@ -29,7 +40,7 @@ class AwsSyncService
                     'status' => 1,
                     'errmsg' => null,
                     'checktime' => time(),
-                    'checknexttime' => time() + max(1, (int)$row['frequency']) * 60,
+                    'checknexttime' => self::calcNextCheckTime((int)$row['frequency']),
                 ]);
                 echo 'AWS 同步任务 ' . $row['id'] . '：' . $result . "\n";
             } catch (Exception $e) {
@@ -37,7 +48,7 @@ class AwsSyncService
                     'status' => 2,
                     'errmsg' => mb_substr($e->getMessage(), 0, 480),
                     'checktime' => time(),
-                    'checknexttime' => time() + max(1, (int)$row['frequency']) * 60,
+                    'checknexttime' => self::calcNextCheckTime((int)$row['frequency']),
                 ]);
                 echo 'AWS 同步任务 ' . $row['id'] . ' 失败：' . $e->getMessage() . "\n";
             }

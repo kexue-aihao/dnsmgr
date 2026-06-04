@@ -13,11 +13,13 @@ tbody tr>td:nth-child(3){overflow: hidden;text-overflow: ellipsis;white-space: n
 <div id="awssyncGuide" class="alert alert-info" style="display:none;">
   <strong>操作步骤：</strong>
   <ol style="margin:8px 0 0 18px;padding:0;">
+    <li>在服务器启动同步进程（需常驻运行）：<code>cd {:app()->getRootPath()} && php think awssynctask</code>；Docker 部署会自动启动</li>
     <li>先到 <a href="/awssync/set"><b>API 设置</b></a> 保存小助理 Token（aws.sb 地址栏 token= 后面的内容）</li>
     <li>点击绿色 <b>添加</b> 按钮进入添加页</li>
     <li><b>选择域名</b> → 点 <b>读取解析记录</b> → 在下拉框选一条 A 记录</li>
-    <li><b>读取 AWS 账号</b> → 选账号 → <b>读取实例</b> → 选 EC2 实例 → 设置间隔 → 保存</li>
+    <li><b>读取 AWS 账号</b> → 选账号 → <b>读取实例</b> → 选 EC2 实例 → 设置间隔（秒）→ 保存</li>
   </ol>
+  <p id="awssyncDaemonState" style="margin:8px 0 0;display:none;"></p>
   <p id="awssyncGuideWarn" style="margin:8px 0 0;color:#c0392b;display:none;"></p>
 </div>
 
@@ -70,6 +72,14 @@ function checkAwssyncPreflight(){
 		if(res.domain_count <= 0){
 			warns.push('域名管理中没有域名，请先在「域名管理」添加域名');
 		}
+		if(!res.run_state){
+			warns.push('AWS IP 同步进程未运行，请执行：cd 站点目录 && php think awssynctask（可用进程守护管理器常驻）');
+		}
+		if(res.run_state){
+			$('#awssyncDaemonState').html('<font color="green">同步进程运行中，上次心跳：' + (res.run_time || '未知') + '</font>').show();
+		}else{
+			$('#awssyncDaemonState').hide();
+		}
 		if(warns.length){
 			$('#awssyncGuideWarn').html(warns.join('<br>')).show();
 		}else{
@@ -114,7 +124,7 @@ $(document).ready(function(){
 			{field: 'aws_region', title: '区域'},
 			{field: 'last_ip', title: 'AWS IP', sortable: true},
 			{field: 'last_dns_ip', title: 'DNS IP'},
-			{field: 'frequency', title: '间隔(分)', sortable: true},
+			{field: 'frequency', title: '间隔(秒)', sortable: true},
 			{
 				field: 'status',
 				title: '状态',

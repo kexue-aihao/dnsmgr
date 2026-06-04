@@ -161,13 +161,13 @@
     <input type="hidden" name="aws_instance_id" v-model="set.aws_instance_id">
 
     <div class="form-group">
-        <label class="col-sm-3 control-label no-padding-right" is-required>④ 同步间隔（分钟）</label>
+        <label class="col-sm-3 control-label no-padding-right" is-required>④ 同步间隔（秒）</label>
 
         <div class="col-sm-6">
 
-            <input type="number" name="frequency" v-model="set.frequency" min="1" max="1440" class="form-control" required>
+            <input type="number" name="frequency" v-model="set.frequency" min="10" max="86400" class="form-control" required>
 
-            <p class="help-block tips">计划任务触发后，按此间隔检查 AWS IP 是否与 DNS 一致。</p>
+            <p class="help-block tips">同步进程每秒轮询，按此间隔检查 AWS IP 是否变化并同步 DNS，建议 10 秒。</p>
 
         </div>
 
@@ -249,7 +249,7 @@ new Vue({
 
             aws_instance_id: '',
 
-            frequency: 3,
+            frequency: 10,
 
         },
 
@@ -634,7 +634,7 @@ new Vue({
                     aws_account_id: this.set.aws_account_id,
                     aws_region: this.set.aws_region,
                     aws_instance_id: this.set.aws_instance_id,
-                    frequency: parseInt(this.set.frequency, 10) || 3,
+                    frequency: parseInt(this.set.frequency, 10) || 10,
                     remark: this.set.remark || ''
                 },
                 dataType: 'json',
