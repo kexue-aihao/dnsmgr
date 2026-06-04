@@ -44,6 +44,7 @@
     <strong>??????</strong>
     ? ?????????????? ? ? ???? A ?? ? ? ??????????????? EC2 ? ? ????????????
   </div>
+
   <form onsubmit="return false" method="post" class="form-horizontal" role="form" id="taskform">
 
     <div class="form-group">
@@ -323,7 +324,6 @@ new Vue({
 
         }
 
-        var that = this;
         $.post('/awssync/preflight', function(res){
             if(res && res.code == 0){
                 if(!res.token_ok){ document.getElementById('tokenHint').style.display = 'block'; }
@@ -620,9 +620,7 @@ new Vue({
 
             }
 
-        },
-
-        save(){
+        },        save(){
             if(!this.set.did){ layer.msg('??????', {icon:2}); return; }
             if(!this.set.recordid || !this.set.rr){ layer.msg('????????????? A ??', {icon:2}); return; }
             if(!this.set.recordinfo){ this.onRecordPick(); }

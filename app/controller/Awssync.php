@@ -425,10 +425,27 @@ class Awssync extends BaseController
         return json(['code' => -1, 'msg' => '参数错误']);
     }
 
+    public function task_add()
+    {
+        return $this->renderTaskform('add');
+    }
+
     public function taskform()
     {
         if (!checkPermission(2)) return $this->alert('error', '无权限');
         $action = input('param.action');
+        if ($action === 'add') {
+            return $this->renderTaskform('add');
+        }
+        if (!in_array($action, ['edit'], true)) {
+            return $this->alert('error', '无效操作');
+        }
+        return $this->renderTaskform($action);
+    }
+
+    private function renderTaskform($action)
+    {
+        if (!checkPermission(2)) return $this->alert('error', '无权限');
         if (!in_array($action, ['add', 'edit'], true)) {
             return $this->alert('error', '无效操作');
         }
@@ -471,7 +488,7 @@ class Awssync extends BaseController
         View::assign('infoJson', json_encode($task, JSON_UNESCAPED_UNICODE) ?: 'null');
         View::assign('domainsJson', json_encode($domains, JSON_UNESCAPED_UNICODE) ?: '[]');
         View::assign('action', $action);
-        return View::fetch();
+        return View::fetch('awssync/taskform');
     }
 
     private function buildTaskFromPost()

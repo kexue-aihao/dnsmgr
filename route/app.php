@@ -134,10 +134,11 @@ Route::group(function () {
     Route::post('/awssync/instances', 'awssync/instances');
     Route::post('/awssync/domain/records', 'awssync/domain_records');
     Route::post('/awssync/preflight', 'awssync/preflight');
-    Route::get('/awssync/task', 'awssync/task');
     Route::post('/awssync/task/data', 'awssync/task_data');
     Route::post('/awssync/task/:action', 'awssync/task_op');
+    Route::get('/awssync/task/add', 'awssync/task_add');
     Route::get('/awssync/task/:action', 'awssync/taskform');
+    Route::get('/awssync/task', 'awssync/task');
 
     Route::any('/optimizeip/opipset', 'optimizeip/opipset');
     Route::post('/optimizeip/queryapi', 'optimizeip/queryapi');

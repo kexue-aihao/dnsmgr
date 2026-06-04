@@ -21,8 +21,7 @@ tbody tr>td:nth-child(3){overflow: hidden;text-overflow: ellipsis;white-space: n
   <p id="awssyncGuideWarn" style="margin:8px 0 0;color:#c0392b;display:none;"></p>
 </div>
 
-<div id="searchToolbar">
-<form onsubmit="return searchSubmit()" method="GET" class="form-inline">
+<form onsubmit="return searchSubmit()" method="GET" class="form-inline" id="searchToolbar">
   <div class="form-group">
 	<label>搜索</label>
 	<select name="type" class="form-control"><option value="1">域名/实例ID</option><option value="2">备注</option><option value="3">Account ID</option></select>
@@ -35,13 +34,12 @@ tbody tr>td:nth-child(3){overflow: hidden;text-overflow: ellipsis;white-space: n
   </div>
   <button type="submit" class="btn btn-primary"><i class="fa fa-search"></i> 搜索</button>
   <a href="javascript:searchClear()" class="btn btn-default"><i class="fa fa-refresh"></i> 刷新</a>
+  <a href="/awssync/task/add" class="btn btn-success" id="btnAwssyncAdd"><i class="fa fa-plus"></i> 添加</a>
   <div class="btn-group" role="group">
 	<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">批量操作 <span class="caret"></span></button>
 	<ul class="dropdown-menu"><li><a href="javascript:operation('open')">开启</a></li><li><a href="javascript:operation('close')">停止</a></li><li><a href="javascript:operation('run')">立即同步</a></li><li><a href="javascript:operation('delete')">删除</a></li></ul>
   </div>
 </form>
-<a href="/awssync/task/add" class="btn btn-success" style="margin-left:6px" onclick="return goAddTask();"><i class="fa fa-plus"></i> 添加</a>
-</div>
 
       <table id="listTable"></table>
     </div>
@@ -55,10 +53,6 @@ tbody tr>td:nth-child(3){overflow: hidden;text-overflow: ellipsis;white-space: n
 <script src="/static/js/bootstrap-table-page-jump-to-1.21.4.min.js"></script>
 <script src="/static/js/custom.js?v=1008"></script>
 <script>
-function goAddTask(){
-	window.location.href = '/awssync/task/add';
-	return false;
-}
 function checkAwssyncPreflight(){
 	$.post('/awssync/preflight', function(res){
 		$('#awssyncGuide').show();

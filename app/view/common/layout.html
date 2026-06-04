@@ -139,7 +139,7 @@
             </a>
             <ul class="treeview-menu">
               <li class="{if strtolower(request()->controller())=='awssync' && request()->action()=='set'}active{/if}"><a href="/awssync/set"><i class="fa fa-circle-o"></i> API 设置</a></li>
-              <li class="{if strtolower(request()->controller())=='awssync' && in_array(request()->action(), ['task','taskform'])}active{/if}"><a href="/awssync/task"><i class="fa fa-circle-o"></i> 同步任务</a></li>
+              <li class="{if strtolower(request()->controller())=='awssync' && in_array(request()->action(), ['task','taskform','task_add'])}active{/if}"><a href="/awssync/task"><i class="fa fa-circle-o"></i> 同步任务</a></li>
             </ul>
           </li>
           <li class="{:checkIfActive('stask,staskform')}">
