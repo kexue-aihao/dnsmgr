@@ -133,6 +133,7 @@ Route::group(function () {
     Route::post('/awssync/accounts', 'awssync/accounts');
     Route::post('/awssync/instances', 'awssync/instances');
     Route::post('/awssync/domain/records', 'awssync/domain_records');
+    Route::post('/awssync/preflight', 'awssync/preflight');
     Route::get('/awssync/task', 'awssync/task');
     Route::post('/awssync/task/data', 'awssync/task_data');
     Route::post('/awssync/task/:action', 'awssync/task_op');

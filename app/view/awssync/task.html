@@ -10,6 +10,17 @@ tbody tr>td:nth-child(3){overflow: hidden;text-overflow: ellipsis;white-space: n
 	<div class="panel panel-default panel-intro">
 	<div class="panel-body">
 
+<div id="awssyncGuide" class="alert alert-info" style="display:none;">
+  <strong>操作步骤：</strong>
+  <ol style="margin:8px 0 0 18px;padding:0;">
+    <li>先到 <a href="/awssync/set"><b>API 设置</b></a> 保存小助理 Token（aws.sb 地址栏 token= 后面的内容）</li>
+    <li>点击绿色 <b>添加</b> 按钮进入添加页</li>
+    <li><b>选择域名</b> → 点 <b>读取解析记录</b> → 在下拉框选一条 A 记录</li>
+    <li><b>读取 AWS 账号</b> → 选账号 → <b>读取实例</b> → 选 EC2 实例 → 设置间隔 → 保存</li>
+  </ol>
+  <p id="awssyncGuideWarn" style="margin:8px 0 0;color:#c0392b;display:none;"></p>
+</div>
+
 <div id="searchToolbar">
 <form onsubmit="return searchSubmit()" method="GET" class="form-inline">
   <div class="form-group">
@@ -29,7 +40,7 @@ tbody tr>td:nth-child(3){overflow: hidden;text-overflow: ellipsis;white-space: n
 	<ul class="dropdown-menu"><li><a href="javascript:operation('open')">开启</a></li><li><a href="javascript:operation('close')">停止</a></li><li><a href="javascript:operation('run')">立即同步</a></li><li><a href="javascript:operation('delete')">删除</a></li></ul>
   </div>
 </form>
-<a href="/awssync/task/add" class="btn btn-success" style="margin-left:6px"><i class="fa fa-plus"></i> 添加</a>
+<a href="/awssync/task/add" class="btn btn-success" style="margin-left:6px" onclick="return goAddTask();"><i class="fa fa-plus"></i> 添加</a>
 </div>
 
       <table id="listTable"></table>
@@ -42,13 +53,42 @@ tbody tr>td:nth-child(3){overflow: hidden;text-overflow: ellipsis;white-space: n
 <script src="/static/js/layer/layer.js"></script>
 <script src="/static/js/bootstrap-table-1.21.4.min.js"></script>
 <script src="/static/js/bootstrap-table-page-jump-to-1.21.4.min.js"></script>
-<script src="/static/js/custom.js?v=1007"></script>
+<script src="/static/js/custom.js?v=1008"></script>
 <script>
+function goAddTask(){
+	window.location.href = '/awssync/task/add';
+	return false;
+}
+function checkAwssyncPreflight(){
+	$.post('/awssync/preflight', function(res){
+		$('#awssyncGuide').show();
+		if(!res || res.code != 0){
+			$('#awssyncGuideWarn').text((res && res.msg) ? res.msg : '环境检查失败').show();
+			return;
+		}
+		var warns = [];
+		if(!res.table_ok){
+			warns.push('数据库表 aws_sync 未就绪：' + (res.table_msg || '请执行 bash update.sh 升级'));
+		}
+		if(!res.token_ok){
+			warns.push('尚未配置 AWS 小助理 Token，请先到 API 设置页保存');
+		}
+		if(res.domain_count <= 0){
+			warns.push('域名管理中没有域名，请先在「域名管理」添加域名');
+		}
+		if(warns.length){
+			$('#awssyncGuideWarn').html(warns.join('<br>')).show();
+		}else{
+			$('#awssyncGuideWarn').hide();
+		}
+	});
+}
 $(document).ready(function(){
 	if (typeof $.fn.bootstrapTable === 'undefined') {
 		layer.alert('表格组件未加载，请 Ctrl+F5 强刷页面；若仍失败请检查 /static/js/bootstrap-table-1.21.4.min.js 是否可访问', {icon:2});
 		return;
 	}
+	checkAwssyncPreflight();
 	updateToolbar();
 	const pageSizeKey = 'awssync_pagesize';
 	const pageNumber = typeof window.$_GET['pageNumber'] != 'undefined' ? parseInt(window.$_GET['pageNumber']) : 1;

@@ -120,9 +120,9 @@ if (typeof $.fn.bootstrapTable !== "undefined") {
 			layer.msg(msg, {icon: 2, time: 5000});
 		},
 		responseHandler: function(res){
-			if (res && typeof res.code !== 'undefined' && res.code != 0 && typeof res.total === 'undefined') {
+			if (res && typeof res.code !== 'undefined' && res.code != 0) {
 				if (typeof layer !== 'undefined') {
-					layer.msg(res.msg || '请求失败', {icon: 2, time: 5000});
+					layer.msg(res.msg || '请求失败', {icon: 2, time: 8000});
 				}
 				return {total: 0, rows: []};
 			}

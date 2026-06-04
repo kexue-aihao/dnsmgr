@@ -133,6 +133,37 @@ class Awssync extends BaseController
         }
     }
 
+    public function preflight()
+    {
+        if (!checkPermission(2)) {
+            return json(['code' => -1, 'msg' => '无权限']);
+        }
+        $token = trim((string)config_get('aws_sb_token', ''));
+        $tableOk = true;
+        $tableMsg = '';
+        $taskCount = 0;
+        try {
+            $taskCount = (int)Db::name('aws_sync')->count();
+        } catch (\Throwable $e) {
+            $tableOk = false;
+            $tableMsg = $e->getMessage();
+        }
+        $domainCount = 0;
+        try {
+            $domainCount = (int)Db::name('domain')->count();
+        } catch (\Throwable $e) {
+            // ignore
+        }
+        return json([
+            'code' => 0,
+            'token_ok' => $token !== '',
+            'table_ok' => $tableOk,
+            'table_msg' => $tableMsg,
+            'domain_count' => $domainCount,
+            'task_count' => $taskCount,
+        ]);
+    }
+
     public function domain_records()
     {
         if (!checkPermission(2)) return json(['code' => -1, 'msg' => '无权限']);
@@ -274,7 +305,9 @@ class Awssync extends BaseController
 
     public function task_op()
     {
-        if (!checkPermission(2)) return $this->alert('error', '无权限');
+        if (!checkPermission(2)) {
+            return json(['code' => -1, 'msg' => '无权限']);
+        }
         $action = input('param.action');
         if ($action == 'add') {
             $task = $this->buildTaskFromPost();
@@ -436,8 +469,8 @@ class Awssync extends BaseController
         if ($task['frequency'] > 1440) {
             return ['code' => -1, 'msg' => '同步间隔不能大于 1440 分钟'];
         }
-        if (!preg_match('/^i-[0-9a-f]+$/i', $task['aws_instance_id'])) {
-            return ['code' => -1, 'msg' => 'EC2 实例 ID 格式不正确'];
+        if (!preg_match('/^i-[0-9a-f]{8,20}$/i', $task['aws_instance_id'])) {
+            return ['code' => -1, 'msg' => 'EC2 实例 ID 格式不正确（应以 i- 开头）'];
         }
         return $task;
     }
