@@ -23,33 +23,41 @@ class Domain extends BaseController
     public function account_data()
     {
         if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
-        $kw = $this->request->post('kw', null, 'trim');
-        $offset = input('post.offset/d');
-        $limit = input('post.limit/d');
-        $sort = input('post.sortName', null, 'trim');
-        $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
+        try {
+            $kw = $this->request->post('kw', null, 'trim');
+            $offset = input('post.offset/d', 0);
+            $limit = input('post.limit/d', 15);
+            if ($limit <= 0) {
+                $limit = 15;
+            }
+            $sort = input('post.sortName', null, 'trim');
+            $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $select = Db::name('account');
-        if (!empty($kw)) {
-            $select->whereLike('name|remark', '%' . $kw . '%');
-        }
-        $total = $select->count();
-        $allowedSort = ['id' => 'id', 'typename' => 'type', 'name' => 'name', 'remark' => 'remark', 'addtime' => 'addtime'];
-        if ($sort && isset($allowedSort[$sort])) {
-            $select->order($allowedSort[$sort], $orderDir);
-        } else {
-            $select->order('id', 'desc');
-        }
-        $rows = $select->limit($offset, $limit)->select();
+            $select = Db::name('account');
+            if (!empty($kw)) {
+                $select->whereLike('name|remark', '%' . $kw . '%');
+            }
+            $total = (clone $select)->count();
+            $allowedSort = ['id' => 'id', 'typename' => 'type', 'name' => 'name', 'remark' => 'remark', 'addtime' => 'addtime'];
+            if ($sort && isset($allowedSort[$sort])) {
+                $select->order($allowedSort[$sort], $orderDir);
+            } else {
+                $select->order('id', 'desc');
+            }
+            $rows = $select->limit($offset, $limit)->select();
 
-        $list = [];
-        foreach ($rows as $row) {
-            $row['typename'] = DnsHelper::$dns_config[$row['type']]['name'];
-            $row['icon'] = DnsHelper::$dns_config[$row['type']]['icon'];
-            $list[] = $row;
-        }
+            $list = [];
+            foreach ($rows as $row) {
+                $meta = DnsHelper::resolveTypeMeta($row['type'] ?? null);
+                $row['typename'] = $meta['name'];
+                $row['icon'] = $meta['icon'];
+                $list[] = $row;
+            }
 
-        return json(['total' => $total, 'rows' => $list]);
+            return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取账户列表失败：' . $e->getMessage()]);
+        }
     }
 
     public function account_add()
@@ -196,6 +204,7 @@ class Domain extends BaseController
     public function domain_data()
     {
         if (!checkPermission(1)) return json(['total' => 0, 'rows' => []]);
+        try {
         $kw = input('post.kw', null, 'trim');
         $type = input('post.type', null, 'trim');
         $status = input('post.status', null, 'trim');
@@ -203,7 +212,10 @@ class Domain extends BaseController
         $sort = input('post.sortName', null, 'trim');
         $orderDir = strtolower(input('post.sortOrder', 'desc')) === 'asc' ? 'asc' : 'desc';
         $offset = input('post.offset/d', 0);
-        $limit = input('post.limit/d', 10);
+        $limit = input('post.limit/d', 15);
+        if ($limit <= 0) {
+            $limit = 15;
+        }
         $id = input('post.id');
         $aid = input('post.aid', null, 'trim');
 
@@ -232,7 +244,7 @@ class Domain extends BaseController
                 $select->where('A.expiretime', '<=', date('Y-m-d H:i:s', time() + 86400 * 30))->where('A.expiretime', '>', date('Y-m-d H:i:s'));
             }
         }
-        $total = $select->count();
+        $total = (clone $select)->count();
         $allowedSort = ['id' => 'A.id', 'name' => 'A.name', 'recordcount' => 'A.recordcount', 'addtime' => 'A.addtime', 'regtime' => 'A.regtime', 'expiretime' => 'A.expiretime', 'is_notice' => 'A.is_notice', 'is_hide' => 'A.is_hide', 'is_sso' => 'A.is_sso', 'typename' => 'B.type', 'category_name' => 'A.cid', 'remark' => 'A.remark'];
         if ($sort && isset($allowedSort[$sort])) {
             $select->order($allowedSort[$sort], $orderDir);
@@ -241,16 +253,25 @@ class Domain extends BaseController
         }
         $rows = $select->fieldRaw('A.*,B.type,B.remark aremark')->limit($offset, $limit)->select();
 
-        $categorys = Db::name('domain_category')->column('name', 'id');
+        $categorys = [];
+        try {
+            $categorys = Db::name('domain_category')->column('name', 'id');
+        } catch (\Throwable $e) {
+            // 旧库可能尚未创建 domain_category 表
+        }
         $list = [];
         foreach ($rows as $row) {
-            $row['typename'] = DnsHelper::$dns_config[$row['type']]['name'];
-            $row['icon'] = DnsHelper::$dns_config[$row['type']]['icon'];
+            $meta = DnsHelper::resolveTypeMeta($row['type'] ?? null);
+            $row['typename'] = $meta['name'];
+            $row['icon'] = $meta['icon'];
             $row['category_name'] = isset($categorys[$row['cid']]) ? $categorys[$row['cid']] : '';
             $list[] = $row;
         }
 
         return json(['total' => $total, 'rows' => $list]);
+        } catch (\Throwable $e) {
+            return json(['total' => 0, 'rows' => [], 'code' => -1, 'msg' => '读取域名列表失败：' . $e->getMessage()]);
+        }
     }
 
     public function domain_op()

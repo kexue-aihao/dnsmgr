@@ -274,6 +274,7 @@ prepare_runtime() {
   # 完整清理 ThinkPHP 缓存（含 fields/schema 缓存，避免 /domain/data /account/data 500）
   rm -rf "$SITE_DIR/runtime/cache/"* "$SITE_DIR/runtime/temp/"* 2>/dev/null || true
   find "$SITE_DIR/runtime/cache" "$SITE_DIR/runtime/temp" -mindepth 1 -delete 2>/dev/null || true
+  find "$SITE_DIR/runtime" -type f -name "*.php" -delete 2>/dev/null || true
 
   detect_web_user || true
   if id "$WEB_USER" >/dev/null 2>&1; then

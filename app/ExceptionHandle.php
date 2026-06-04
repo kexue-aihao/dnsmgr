@@ -50,9 +50,19 @@ class ExceptionHandle extends Handle
      */
     public function render($request, Throwable $e): Response
     {
-        // 添加自定义异常处理机制
+        if ($request->isPost() || $request->isAjax()) {
+            $msg = $e->getMessage();
+            if (env('app_debug')) {
+                $msg .= ' @ ' . basename($e->getFile()) . ':' . $e->getLine();
+            }
+            $payload = ['code' => -1, 'msg' => $msg];
+            if ($request->isPost() && str_contains($request->pathinfo(), 'data')) {
+                $payload['total'] = 0;
+                $payload['rows'] = [];
+            }
+            return json($payload)->code(500);
+        }
 
-        // 其他错误交给系统处理
         return parent::render($request, $e);
     }
 }

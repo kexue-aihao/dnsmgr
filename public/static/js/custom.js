@@ -11,7 +11,7 @@ if (parameter_str !== undefined) {
     }
     window.$_GET = $_GET;
 } else {
-    window.$_GET = [];
+    window.$_GET = {};
 }
 
 function searchRefresh(){
@@ -101,6 +101,29 @@ if (typeof $.fn.bootstrapTable !== "undefined") {
 		},
 		formatNoMatches: function(){
 			return '没有找到匹配的记录';
+		},
+		onLoadError: function(status, jqXHR){
+			if (typeof layer === 'undefined') return;
+			var msg = '加载列表失败';
+			if (status) msg += ' (HTTP ' + status + ')';
+			if (jqXHR && jqXHR.responseJSON && jqXHR.responseJSON.msg) {
+				msg = jqXHR.responseJSON.msg;
+			} else if (jqXHR && jqXHR.responseText) {
+				var txt = jqXHR.responseText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+				if (txt.length > 0) {
+					msg += '：' + (txt.length > 120 ? txt.substring(0, 120) + '...' : txt);
+				}
+			}
+			layer.msg(msg, {icon: 2, time: 5000});
+		},
+		responseHandler: function(res){
+			if (res && typeof res.code !== 'undefined' && res.code != 0 && typeof res.total === 'undefined') {
+				if (typeof layer !== 'undefined') {
+					layer.msg(res.msg || '请求失败', {icon: 2, time: 5000});
+				}
+				return {total: 0, rows: []};
+			}
+			return res;
 		},
 		onSort: function(name, order) {
 			var $table = $('#listTable');

@@ -111,19 +111,19 @@ function saveSetting(obj){
 		url : '/awssync/set',
 		data : $(obj).serialize(),
 		dataType : 'json',
+		timeout: 30000,
 		success : function(data) {
-			layer.close(ii);
 			if(data.code == 0){
-				layer.alert('保存成功！', {icon:1}, function(){
-					loadRemoteList();
-				});
+				layer.msg('保存成功，请点击下方「刷新账号与实例列表」', {icon:1, time:2500});
 			}else{
 				layer.alert(data.msg, {icon:2});
 			}
 		},
-		error:function(){
+		error:function(xhr, textStatus){
+			showAjaxError(xhr, textStatus);
+		},
+		complete: function(){
 			layer.close(ii);
-			layer.msg('服务器错误');
 		}
 	});
 	return false;
@@ -173,9 +173,8 @@ function loadRemoteList(){
         type: 'POST',
         url: '/awssync/remote',
         dataType: 'json',
-        timeout: 120000,
+        timeout: 90000,
         success: function(res){
-            layer.close(ii);
             if(res.code != 0){
                 layer.alert(res.msg || '读取失败', {icon:2});
                 return;
@@ -183,8 +182,10 @@ function loadRemoteList(){
             renderRemoteList(res.accounts || [], res.instances || []);
         },
         error: function(xhr, textStatus){
-            layer.close(ii);
             showAjaxError(xhr, textStatus);
+        },
+        complete: function(){
+            layer.close(ii);
         }
     });
 }

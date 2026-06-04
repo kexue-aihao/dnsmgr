@@ -42,7 +42,11 @@ class LoadConfig
         }
 
         try {
-            $res = Db::name('config')->cache('configs', 0)->column('value', 'key');
+            try {
+                $res = Db::name('config')->cache('configs', 0)->column('value', 'key');
+            } catch (Exception $e) {
+                $res = Db::name('config')->column('value', 'key');
+            }
             if (empty($res['sys_key']) && !empty(env('app.sys_key'))) {
                 config_set('sys_key', env('app.sys_key'));
                 Cache::delete('configs');

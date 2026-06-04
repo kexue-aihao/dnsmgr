@@ -95,10 +95,11 @@ class Awssync extends BaseController
         if (function_exists('set_time_limit')) {
             @set_time_limit(120);
         }
+        $withInstances = input('post.with_instances/d', 1) === 1;
         try {
             $aws = new AwsSbService();
             $accounts = $aws->getAccounts();
-            $instances = $aws->listAllInstances();
+            $instances = $withInstances ? $aws->listAllInstances() : [];
             return json([
                 'code' => 0,
                 'accounts' => $accounts,

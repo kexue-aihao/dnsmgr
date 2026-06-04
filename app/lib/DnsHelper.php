@@ -711,6 +711,23 @@ class DnsHelper
         return self::$dns_config;
     }
 
+    public static function resolveTypeMeta(?string $type): array
+    {
+        if ($type && isset(self::$dns_config[$type])) {
+            $cfg = self::$dns_config[$type];
+            return [
+                'name' => $cfg['name'],
+                'icon' => $cfg['icon'],
+                'add' => $cfg['add'] ?? false,
+            ];
+        }
+        return [
+            'name' => $type ?: '未知',
+            'icon' => 'dnspod.ico',
+            'add' => false,
+        ];
+    }
+
     private static function getConfig($aid)
     {
         $account = Db::name('account')->where('id', $aid)->find();
