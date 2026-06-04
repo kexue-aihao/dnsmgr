@@ -176,8 +176,8 @@ class Dmonitor extends BaseController
                 return json(['code' => -1, 'msg' => '当前容灾切换策略已存在']);
             }
             Db::name('dmtask')->where('id', $id)->update($task);
-            if ($task['type'] == 2 && $task['backup_mode'] == 1 && !empty($poolIps)) {
-                BackupPoolService::addIps($id, $poolIps, [$task['main_value']]);
+            if ($task['type'] == 2 && $task['backup_mode'] == 1) {
+                BackupPoolService::syncIps($id, $poolIps, [$task['main_value']]);
             }
             return json(['code' => 0, 'msg' => '修改成功']);
         } elseif ($action == 'setactive') {
@@ -225,6 +225,14 @@ class Dmonitor extends BaseController
             $task = Db::name('dmtask')->where('id', $id)->find();
             if (empty($task)) return $this->alert('error', '切换策略不存在');
             if (!isset($task['backup_mode'])) $task['backup_mode'] = 0;
+            $task['backup_pool'] = '';
+            if ((int)$task['backup_mode'] === 1) {
+                try {
+                    $task['backup_pool'] = BackupPoolService::ipsToText((int)$task['id']);
+                } catch (\Throwable $e) {
+                    $task['backup_pool'] = '';
+                }
+            }
         }
 
         $domains = [];

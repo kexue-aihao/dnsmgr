@@ -62,6 +62,28 @@ class BackupPoolService
         return Db::name('dmbackup_pool')->where('task_id', $taskId)->order('sort', 'asc')->order('id', 'asc')->select()->toArray();
     }
 
+    /** 将池中 IP 转为编辑表单 textarea 用的多行文本 */
+    public static function ipsToText(int $taskId): string
+    {
+        $rows = self::list($taskId);
+        if (empty($rows)) {
+            return '';
+        }
+        return implode("\n", array_column($rows, 'ip'));
+    }
+
+    /** 编辑保存时按文本框内容同步池（增删与顺序以文本框为准） */
+    public static function syncIps(int $taskId, array $ips, array $skipValues = []): int
+    {
+        $ips = array_values(array_unique($ips));
+        foreach (self::list($taskId) as $row) {
+            if (!in_array($row['ip'], $ips, true)) {
+                self::deleteIp($taskId, $row['ip']);
+            }
+        }
+        return self::addIps($taskId, $ips, $skipValues);
+    }
+
     public static function peekNext($db, int $taskId): ?array
     {
         $row = $db->name('dmbackup_pool')->where('task_id', $taskId)->order('sort', 'asc')->order('id', 'asc')->find();

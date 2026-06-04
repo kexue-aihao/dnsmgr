@@ -73,7 +73,7 @@
         <label class="col-sm-3 control-label no-padding-right" is-required>备用IP池</label>
         <div class="col-sm-6">
             <textarea name="backup_pool" v-model="set.backup_pool" rows="6" placeholder="每行一个IP，切换成功后自动从池中删除&#10;例如：&#10;1.2.3.4&#10;5.6.7.8" class="form-control"></textarea>
-            <p class="help-block tips">按顺序切换；切换成功后该IP会从池中移除，并变为当前监控IP。</p>
+            <p class="help-block tips">按顺序切换；切换成功后该IP会从池中移除，并变为当前监控IP。编辑时会自动加载池中已有 IP。</p>
         </div>
     </div>
     <div class="form-group" v-show="set.type==2&&set.backup_mode==1">
