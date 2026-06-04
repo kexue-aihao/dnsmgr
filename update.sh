@@ -22,6 +22,7 @@ set -euo pipefail
 REPO_URL="${DNSMGR_REPO:-https://github.com/kexue-aihao/dnsmgr.git}"
 BRANCH="${DNSMGR_BRANCH:-master}"
 SITE_DIR="${DNSMGR_SITE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+UPDATE_SCRIPT="$SITE_DIR/update.sh"
 WEB_USER="${DNSMGR_WEB_USER:-www}"
 DRY_RUN="${DNSMGR_DRY_RUN:-0}"
 SKIP_COMPOSER="${DNSMGR_SKIP_COMPOSER:-0}"
@@ -309,6 +310,16 @@ sync_files() {
   fi
 
   rsync "${rsync_opts[@]}" "${excludes[@]}" "$src/" "$SITE_DIR/"
+  ensure_update_script_executable
+}
+
+# rsync 从 Git 拉取的 update.sh 通常为 644，覆盖后需恢复 +x，否则下次无法 ./update.sh
+ensure_update_script_executable() {
+  [[ "$DRY_RUN" == "1" ]] && return 0
+  if [[ -f "$UPDATE_SCRIPT" ]]; then
+    chmod +x "$UPDATE_SCRIPT" 2>/dev/null && ok "已恢复 update.sh 可执行权限" \
+      || warn "chmod +x update.sh 失败，下次请使用: bash update.sh"
+  fi
 }
 
 prepare_runtime() {
@@ -491,6 +502,8 @@ main() {
   if [[ -n "$BACKUP_ENV" && -f "$BACKUP_ENV" ]]; then
     log ".env 备份仍保留在: $BACKUP_ENV （确认无误后可手动删除）"
   fi
+
+  ensure_update_script_executable
 }
 
 main "$@"
