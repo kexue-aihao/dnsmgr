@@ -125,6 +125,8 @@ Route::group(function () {
     Route::get('/dmonitor/task/:action', 'dmonitor/taskform');
     Route::get('/dmonitor/task', 'dmonitor/task');
     Route::post('/dmonitor/clean', 'dmonitor/clean');
+    Route::post('/dmonitor/pool/data/:id', 'dmonitor/pool_data');
+    Route::post('/dmonitor/pool/:action', 'dmonitor/pool_op');
 
     Route::any('/optimizeip/opipset', 'optimizeip/opipset');
     Route::post('/optimizeip/queryapi', 'optimizeip/queryapi');
@@ -188,6 +190,10 @@ Route::group('api', function () {
     Route::post('/record/batch/:id', 'domain/record_batch');
 
     Route::post('/cert/order', 'cert/order_info');
+
+    Route::post('/dmonitor/pool/add', 'dmonitor/api_pool_add');
+    Route::post('/dmonitor/pool/list', 'dmonitor/api_pool_list');
+    Route::post('/dmonitor/pool/delete', 'dmonitor/api_pool_delete');
 
 })->middleware(AuthApi::class);
 

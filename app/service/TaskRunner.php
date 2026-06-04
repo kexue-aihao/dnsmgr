@@ -86,10 +86,28 @@ class TaskRunner
                 if ($drow['type'] == 'cloudflare' && $row['cdn'] == 1) {
                     $recordinfo['Line'] = '1';
                 }
-                $res = $dns->updateDomainRecord($row['recordid'], $row['rr'], getDnsType($row['backup_value']), $row['backup_value'], $recordinfo['Line'], $recordinfo['TTL']);
+                $switchValue = $row['backup_value'];
+                $poolRow = null;
+                if (!empty($row['backup_mode'])) {
+                    $poolRow = BackupPoolService::peekNext($this->db(), $row['id']);
+                    if ($poolRow) {
+                        $switchValue = $poolRow['ip'];
+                    } elseif (empty($switchValue)) {
+                        echo '备用IP池已空，无法切换（任务ID：'.$row['id'].'）'."\n";
+                        $this->db()->name('log')->insert(['uid' => 0, 'domain' => $drow['name'], 'action' => '容灾切换失败', 'data' => '备用IP池已空', 'addtime' => date("Y-m-d H:i:s")]);
+                        $this->closeDb();
+                        return;
+                    }
+                }
+                $res = $dns->updateDomainRecord($row['recordid'], $row['rr'], getDnsType($switchValue), $switchValue, $recordinfo['Line'], $recordinfo['TTL']);
                 if (!$res) {
                     $this->db()->name('log')->insert(['uid' => 0, 'domain' => $drow['name'], 'action' => '修改解析失败', 'data' => $dns->getError(), 'addtime' => date("Y-m-d H:i:s")]);
+                } elseif ($poolRow) {
+                    $this->db()->name('dmbackup_pool')->where('id', $poolRow['id'])->delete();
+                    $this->db()->name('dmtask')->where('id', $row['id'])->update(['main_value' => $switchValue]);
+                    $row['main_value'] = $switchValue;
                 }
+                $row['backup_value'] = $switchValue;
             } elseif ($row['type'] == 1 || $row['type'] == 3) {
                 $dns = DnsHelper::getModel2($drow);
                 $res = $dns->setDomainRecordStatus($row['recordid'], '0');

@@ -6,6 +6,7 @@ use app\BaseController;
 use think\facade\Db;
 use think\facade\View;
 use think\facade\Cache;
+use app\service\BackupPoolService;
 
 class Dmonitor extends BaseController
 {
@@ -75,6 +76,7 @@ class Dmonitor extends BaseController
         foreach ($list as &$row) {
             $row['addtimestr'] = date('Y-m-d H:i:s', $row['addtime']);
             $row['checktimestr'] = $row['checktime'] > 0 ? date('Y-m-d H:i:s', $row['checktime']) : '未运行';
+            $row['pool_count'] = BackupPoolService::count($row['id']);
         }
 
         return json(['total' => $total, 'rows' => $list]);
@@ -92,6 +94,7 @@ class Dmonitor extends BaseController
                 'type' => input('post.type/d'),
                 'main_value' => input('post.main_value', null, 'trim'),
                 'backup_value' => input('post.backup_value', null, 'trim'),
+                'backup_mode' => input('post.backup_mode/d', 0),
                 'checktype' => input('post.checktype/d'),
                 'checkurl' => input('post.checkurl', null, 'trim'),
                 'tcpport' => !empty(input('post.tcpport')) ? input('post.tcpport/d') : null,
@@ -112,13 +115,18 @@ class Dmonitor extends BaseController
             if ($task['checktype'] > 0 && $task['timeout'] > $task['frequency']) {
                 return json(['code' => -1, 'msg' => '为保障容灾切换任务正常运行，最大超时时间不能大于检测间隔']);
             }
-            if ($task['type'] == 2 && $task['backup_value'] == $task['main_value']) {
-                return json(['code' => -1, 'msg' => '主备地址不能相同']);
+            $poolIps = BackupPoolService::parseIps(input('post.backup_pool', '', 'trim'));
+            if ($task['type'] == 2) {
+                $err = $this->validateBackupSwitch($task, $poolIps);
+                if ($err) return json(['code' => -1, 'msg' => $err]);
             }
             if (Db::name('dmtask')->where('recordid', $task['recordid'])->find()) {
                 return json(['code' => -1, 'msg' => '当前容灾切换策略已存在']);
             }
-            Db::name('dmtask')->insert($task);
+            $taskId = Db::name('dmtask')->insertGetId($task);
+            if ($task['type'] == 2 && $task['backup_mode'] == 1 && !empty($poolIps)) {
+                BackupPoolService::addIps($taskId, $poolIps, [$task['main_value']]);
+            }
             return json(['code' => 0, 'msg' => '添加成功']);
         } elseif ($action == 'edit') {
             $id = input('post.id/d');
@@ -129,6 +137,7 @@ class Dmonitor extends BaseController
                 'type' => input('post.type/d'),
                 'main_value' => input('post.main_value', null, 'trim'),
                 'backup_value' => input('post.backup_value', null, 'trim'),
+                'backup_mode' => input('post.backup_mode/d', 0),
                 'checktype' => input('post.checktype/d'),
                 'checkurl' => input('post.checkurl', null, 'trim'),
                 'tcpport' => !empty(input('post.tcpport')) ? input('post.tcpport/d') : null,
@@ -147,13 +156,18 @@ class Dmonitor extends BaseController
             if ($task['checktype'] > 0 && $task['timeout'] > $task['frequency']) {
                 return json(['code' => -1, 'msg' => '为保障容灾切换任务正常运行，最大超时时间不能大于检测间隔']);
             }
-            if ($task['type'] == 2 && $task['backup_value'] == $task['main_value']) {
-                return json(['code' => -1, 'msg' => '主备地址不能相同']);
+            $poolIps = BackupPoolService::parseIps(input('post.backup_pool', '', 'trim'));
+            if ($task['type'] == 2) {
+                $err = $this->validateBackupSwitch($task, $poolIps, $id);
+                if ($err) return json(['code' => -1, 'msg' => $err]);
             }
             if (Db::name('dmtask')->where('recordid', $task['recordid'])->where('id', '<>', $id)->find()) {
                 return json(['code' => -1, 'msg' => '当前容灾切换策略已存在']);
             }
             Db::name('dmtask')->where('id', $id)->update($task);
+            if ($task['type'] == 2 && $task['backup_mode'] == 1 && !empty($poolIps)) {
+                BackupPoolService::addIps($id, $poolIps, [$task['main_value']]);
+            }
             return json(['code' => 0, 'msg' => '修改成功']);
         } elseif ($action == 'setactive') {
             $id = input('post.id/d');
@@ -164,6 +178,7 @@ class Dmonitor extends BaseController
             $id = input('post.id/d');
             Db::name('dmtask')->where('id', $id)->delete();
             Db::name('dmlog')->where('taskid', $id)->delete();
+            BackupPoolService::deleteByTask($id);
             return json(['code' => 0, 'msg' => '删除成功']);
         } elseif ($action == 'operation') {
             $ids = input('post.ids');
@@ -172,6 +187,7 @@ class Dmonitor extends BaseController
                 if (input('post.act') == 'delete') {
                     Db::name('dmtask')->where('id', $id)->delete();
                     Db::name('dmlog')->where('taskid', $id)->delete();
+                    BackupPoolService::deleteByTask($id);
                     $success++;
                 } elseif (input('post.act') == 'retry') {
                     Db::name('dmtask')->where('id', $id)->update(['checknexttime' => time()]);
@@ -197,6 +213,7 @@ class Dmonitor extends BaseController
             $id = input('get.id/d');
             $task = Db::name('dmtask')->where('id', $id)->find();
             if (empty($task)) return $this->alert('error', '切换策略不存在');
+            if (!isset($task['backup_mode'])) $task['backup_mode'] = 0;
         }
 
         $domains = [];
@@ -218,12 +235,14 @@ class Dmonitor extends BaseController
         $id = input('param.id/d');
         $task = Db::name('dmtask')->where('id', $id)->find();
         if (empty($task)) return $this->alert('error', '切换策略不存在');
+        if (!isset($task['backup_mode'])) $task['backup_mode'] = 0;
 
         $switch_count = Db::name('dmlog')->where('taskid', $id)->where('date', '>=', date("Y-m-d H:i:s", strtotime("-1 days")))->count();
         $fail_count = Db::name('dmlog')->where('taskid', $id)->where('date', '>=', date("Y-m-d H:i:s", strtotime("-1 days")))->where('action', 1)->count();
 
         $task['switch_count'] = $switch_count;
         $task['fail_count'] = $fail_count;
+        $task['pool_count'] = BackupPoolService::count($id);
         if ($task['type'] == 3) {
             $task['action_name'] = ['未知', '<font color="red">开启解析</font>', '<font color="green">暂停解析</font>'];
         } elseif ($task['type'] == 2) {
@@ -270,5 +289,128 @@ class Dmonitor extends BaseController
         $run_time = config_get('run_time', null, true);
         $run_state = $run_time ? (time() - strtotime($run_time) > 10 ? 0 : 1) : 0;
         return $run_state == 1 ? 'ok' : 'error';
+    }
+
+    public function pool_data()
+    {
+        if (!checkPermission(2)) return json(['total' => 0, 'rows' => []]);
+        $taskId = input('param.id/d');
+        $list = BackupPoolService::list($taskId);
+        foreach ($list as &$row) {
+            $row['addtimestr'] = date('Y-m-d H:i:s', $row['addtime']);
+        }
+        return json(['total' => count($list), 'rows' => $list]);
+    }
+
+    public function pool_op()
+    {
+        if (!checkPermission(2)) return $this->alert('error', '无权限');
+        $action = input('param.action');
+        $taskId = input('post.task_id/d');
+        $task = Db::name('dmtask')->alias('A')->join('domain B', 'A.did = B.id')->where('A.id', $taskId)->field('A.*,B.name domain')->find();
+        if (!$task) {
+            return json(['code' => -1, 'msg' => '切换策略不存在']);
+        }
+        if ($action == 'add') {
+            $ips = BackupPoolService::parseIps(input('post.ips', '', 'trim'));
+            if (empty($ips)) {
+                return json(['code' => -1, 'msg' => '请填写有效的IP地址']);
+            }
+            $added = BackupPoolService::addIps($taskId, $ips, [$task['main_value']]);
+            return json(['code' => 0, 'msg' => '成功添加'.$added.'个备用IP', 'added' => $added]);
+        } elseif ($action == 'delete') {
+            $ip = input('post.ip', null, 'trim');
+            if (empty($ip)) {
+                return json(['code' => -1, 'msg' => 'IP不能为空']);
+            }
+            if (!BackupPoolService::deleteIp($taskId, $ip)) {
+                return json(['code' => -1, 'msg' => 'IP不存在或已删除']);
+            }
+            return json(['code' => 0, 'msg' => '删除成功']);
+        } elseif ($action == 'clear') {
+            BackupPoolService::deleteByTask($taskId);
+            return json(['code' => 0, 'msg' => '已清空备用IP池']);
+        }
+        return json(['code' => -1, 'msg' => '参数错误']);
+    }
+
+    public function api_pool_add()
+    {
+        $task = BackupPoolService::resolveTaskId(input('post.task_id/d'), input('post.domain_id/d'), input('post.rr', null, 'trim'));
+        if (!$task) {
+            return json(['code' => -1, 'msg' => '容灾切换策略不存在']);
+        }
+        if (!checkPermission(0, $task['domain'])) {
+            return json(['code' => -1, 'msg' => '无权限'])->code(403);
+        }
+        if ((int)$task['type'] !== 2 || (int)$task['backup_mode'] !== 1) {
+            return json(['code' => -1, 'msg' => '该策略未启用备用IP池模式']);
+        }
+        $ips = BackupPoolService::parseIps(input('post.ips'));
+        if (empty($ips) && input('post.ip')) {
+            $ips = BackupPoolService::parseIps(input('post.ip', null, 'trim'));
+        }
+        if (empty($ips)) {
+            return json(['code' => -1, 'msg' => '请提供有效的IP地址']);
+        }
+        $added = BackupPoolService::addIps($task['id'], $ips, [$task['main_value']]);
+        return json(['code' => 0, 'msg' => '成功添加'.$added.'个备用IP', 'added' => $added, 'pool_count' => BackupPoolService::count($task['id'])]);
+    }
+
+    public function api_pool_list()
+    {
+        $task = BackupPoolService::resolveTaskId(input('post.task_id/d'), input('post.domain_id/d'), input('post.rr', null, 'trim'));
+        if (!$task) {
+            return json(['code' => -1, 'msg' => '容灾切换策略不存在']);
+        }
+        if (!checkPermission(0, $task['domain'])) {
+            return json(['code' => -1, 'msg' => '无权限'])->code(403);
+        }
+        return json(['code' => 0, 'data' => BackupPoolService::list($task['id']), 'pool_count' => BackupPoolService::count($task['id'])]);
+    }
+
+    public function api_pool_delete()
+    {
+        $task = BackupPoolService::resolveTaskId(input('post.task_id/d'), input('post.domain_id/d'), input('post.rr', null, 'trim'));
+        if (!$task) {
+            return json(['code' => -1, 'msg' => '容灾切换策略不存在']);
+        }
+        if (!checkPermission(0, $task['domain'])) {
+            return json(['code' => -1, 'msg' => '无权限'])->code(403);
+        }
+        $ip = input('post.ip', null, 'trim');
+        if (empty($ip)) {
+            return json(['code' => -1, 'msg' => 'IP不能为空']);
+        }
+        if (!BackupPoolService::deleteIp($task['id'], $ip)) {
+            return json(['code' => -1, 'msg' => 'IP不存在或已删除']);
+        }
+        return json(['code' => 0, 'msg' => '删除成功', 'pool_count' => BackupPoolService::count($task['id'])]);
+    }
+
+    private function validateBackupSwitch(array $task, array $poolIps, $taskId = null): ?string
+    {
+        if ($task['backup_mode'] == 1) {
+            $poolCount = $taskId ? BackupPoolService::count($taskId) : 0;
+            if (empty($poolIps) && $poolCount == 0 && empty($task['backup_value'])) {
+                return '备用IP池模式下请至少添加一个备用IP';
+            }
+            if (!empty($task['backup_value']) && $task['backup_value'] == $task['main_value']) {
+                return '主备地址不能相同';
+            }
+            foreach ($poolIps as $ip) {
+                if ($ip == $task['main_value']) {
+                    return '备用IP不能与当前解析IP相同：'.$ip;
+                }
+            }
+            return null;
+        }
+        if (empty($task['backup_value'])) {
+            return '请填写备用解析记录';
+        }
+        if ($task['backup_value'] == $task['main_value']) {
+            return '主备地址不能相同';
+        }
+        return null;
     }
 }

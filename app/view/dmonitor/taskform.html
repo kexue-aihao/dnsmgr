@@ -53,9 +53,33 @@
         </div>
     </div>
     <div class="form-group" v-show="set.type==2">
+        <label class="col-sm-3 control-label no-padding-right" is-required>备用模式</label>
+        <div class="col-sm-6">
+            <label class="radio-inline">
+                <input type="radio" name="backup_mode" value="0" v-model="set.backup_mode"> 单个备用IP
+            </label>
+            <label class="radio-inline">
+                <input type="radio" name="backup_mode" value="1" v-model="set.backup_mode"> 备用IP池（用后删除）
+            </label>
+        </div>
+    </div>
+    <div class="form-group" v-show="set.type==2&&set.backup_mode==0">
         <label class="col-sm-3 control-label no-padding-right" is-required>备用解析记录</label>
         <div class="col-sm-6">
-            <input type="text" name="backup_value" v-model="set.backup_value" placeholder="支持填写IP或CNAME地址" class="form-control" required>
+            <input type="text" name="backup_value" v-model="set.backup_value" placeholder="支持填写IP或CNAME地址" class="form-control">
+        </div>
+    </div>
+    <div class="form-group" v-show="set.type==2&&set.backup_mode==1">
+        <label class="col-sm-3 control-label no-padding-right" is-required>备用IP池</label>
+        <div class="col-sm-6">
+            <textarea name="backup_pool" v-model="set.backup_pool" rows="6" placeholder="每行一个IP，切换成功后自动从池中删除&#10;例如：&#10;1.2.3.4&#10;5.6.7.8" class="form-control"></textarea>
+            <p class="help-block tips">按顺序切换；切换成功后该IP会从池中移除，并变为当前监控IP。</p>
+        </div>
+    </div>
+    <div class="form-group" v-show="set.type==2&&set.backup_mode==1">
+        <label class="col-sm-3 control-label no-padding-right">兜底备用IP</label>
+        <div class="col-sm-6">
+            <input type="text" name="backup_value" v-model="set.backup_value" placeholder="IP池用尽时使用，可留空" class="form-control">
         </div>
     </div>
     <div class="form-group" v-show="set.type==2&&dnstype=='cloudflare'">
@@ -169,7 +193,9 @@ new Vue({
             recordinfo: '',
             main_value: '',
             type: 1,
+            backup_mode: 0,
             backup_value: '',
+            backup_pool: '',
             checktype: 1,
             tcpport: 80,
             checkurl: '',

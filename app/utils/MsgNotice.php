@@ -16,7 +16,11 @@ class MsgNotice
             $mail_title = 'DNS容灾切换-发生告警通知';
             $mail_content = '尊敬的用户，您好：<br/>您的域名 <b>'.$task['domain'].'</b> 的 <b>'.$task['main_value'].'</b> 记录发生了异常';
             if ($task['type'] == 2) {
-                $mail_content .= '，已自动切换为备用解析记录 '.$task['backup_value'].' ';
+                if (!empty($task['backup_mode'])) {
+                    $mail_content .= '，已从备用IP池切换为 '.$task['backup_value'].' ';
+                } else {
+                    $mail_content .= '，已自动切换为备用解析记录 '.$task['backup_value'].' ';
+                }
             } elseif ($task['type'] == 1) {
                 $mail_content .= '，已自动暂停解析';
             } else {

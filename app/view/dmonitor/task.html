@@ -96,6 +96,9 @@ $(document).ready(function(){
 					if(value == 1) {
 						return '暂停解析';
 					} else if(value == 2) {
+						if(row.backup_mode == 1){
+							return '<span title="" data-toggle="tooltip" data-placement="bottom" data-original-title="备用池剩余：'+row.pool_count+'个" class="tips">IP池切换</span>';
+						}
 						return '<span title="" data-toggle="tooltip" data-placement="bottom" data-original-title="备用：'+row.backup_value+'" class="tips">切换备用</span>';
 					} else if(value == 3) {
 						return '<span title="" data-toggle="tooltip" data-placement="bottom" data-original-title="同域名正常数量<='+row.cycle+'" class="tips">条件开启</span>';

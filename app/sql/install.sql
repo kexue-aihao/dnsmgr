@@ -110,9 +110,22 @@ CREATE TABLE `dnsmgr_dmtask` (
   `errcount` tinyint(5) NOT NULL DEFAULT 0,
   `status` tinyint(1) NOT NULL DEFAULT 0,
   `active` tinyint(1) NOT NULL DEFAULT 0,
+  `backup_mode` tinyint(1) NOT NULL DEFAULT 0,
   `recordinfo` varchar(200) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `did` (`did`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `dnsmgr_dmbackup_pool`;
+CREATE TABLE `dnsmgr_dmbackup_pool` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `task_id` int(11) unsigned NOT NULL,
+  `ip` varchar(128) NOT NULL,
+  `sort` int(11) NOT NULL DEFAULT 0,
+  `addtime` int(11) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `task_id` (`task_id`),
+  KEY `ip` (`ip`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS `dnsmgr_dmlog`;
