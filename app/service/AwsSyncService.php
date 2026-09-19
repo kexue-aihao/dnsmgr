@@ -43,7 +43,7 @@ class AwsSyncService
                     'checknexttime' => self::calcNextCheckTime((int)$row['frequency']),
                 ]);
                 echo 'AWS 同步任务 ' . $row['id'] . '：' . $result . "\n";
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 Db::name('aws_sync')->where('id', $row['id'])->update([
                     'status' => 2,
                     'errmsg' => mb_substr($e->getMessage(), 0, 480),
@@ -62,6 +62,11 @@ class AwsSyncService
      */
     public function executeOne(array $row): string
     {
+        // 同一轮中前一个任务可能已经更改了此记录的 ID 和同步缓存。
+        $row = Db::name('aws_sync')->where('id', $row['id'])->find();
+        if (!$row) {
+            throw new Exception('AWS 同步任务不存在');
+        }
         $aws = new AwsSbService();
         $newIp = $aws->getInstancePublicIp($row['aws_account_id'], $row['aws_region'], $row['aws_instance_id']);
 
@@ -77,11 +82,14 @@ class AwsSyncService
         }
 
         $recordinfo = json_decode((string)$row['recordinfo'], true);
-        if (!is_array($recordinfo) || empty($recordinfo['Line']) || empty($recordinfo['TTL'])) {
+        if (!is_array($recordinfo) || !isset($recordinfo['Line'], $recordinfo['TTL']) || (int)$recordinfo['TTL'] <= 0) {
             throw new Exception('解析记录信息不完整，请重新获取解析记录后保存');
         }
 
         $dns = DnsHelper::getModel2($drow);
+        if (!$dns) {
+            throw new Exception('DNS模块不存在');
+        }
         $res = $dns->updateDomainRecord(
             $row['recordid'],
             $row['rr'],
@@ -94,11 +102,19 @@ class AwsSyncService
             throw new Exception('修改解析失败：' . $dns->getError());
         }
 
-        Db::name('aws_sync')->where('id', $row['id'])->update([
+        TaskRecordService::syncRecordId($drow, $row['recordid'], $res, [
+            'Name' => $row['rr'],
+            'Type' => 'A',
+            'Value' => $newIp,
+            'Line' => $recordinfo['Line'],
+            'TTL' => (int)$recordinfo['TTL'],
+        ]);
+        $changes = [
             'last_dns_ip' => $newIp,
             'last_ip' => $newIp,
             'sync_count' => (int)$row['sync_count'] + 1,
-        ]);
+        ];
+        Db::name('aws_sync')->where('id', $row['id'])->update($changes);
 
         $domainName = Db::name('domain')->where('id', $row['did'])->value('name');
         $logData = $row['rr'] . '.' . $domainName . ' A 记录 ' . ($row['last_dns_ip'] ?: '未知') . ' → ' . $newIp . '（实例 ' . $row['aws_instance_id'] . '）';

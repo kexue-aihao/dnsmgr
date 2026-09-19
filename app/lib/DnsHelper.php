@@ -41,6 +41,7 @@ class DnsHelper
             'weight' => false, //是否支持权重
             'page' => false, //是否客户端分页
             'add' => true, //是否支持添加域名
+            'sort' => true, //是否支持排序
         ],
         'dnspod' => [
             'name' => '腾讯云',
@@ -76,6 +77,7 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => true,
+            'sort' => true,
         ],
         'huawei' => [
             'name' => '华为云',
@@ -111,6 +113,7 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => true,
+            'sort' => true,
         ],
         'baidu' => [
             'name' => '百度云',
@@ -146,6 +149,7 @@ class DnsHelper
             'weight' => false,
             'page' => true,
             'add' => true,
+            'sort' => false,
         ],
         'west' => [
             'name' => '西部数码',
@@ -181,6 +185,7 @@ class DnsHelper
             'weight' => false,
             'page' => false,
             'add' => false,
+            'sort' => false,
         ],
         'huoshan' => [
             'name' => '火山引擎',
@@ -216,6 +221,7 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => true,
+            'sort' => false,
         ],
         'jdcloud' => [
             'name' => '京东云',
@@ -251,6 +257,7 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => true,
+            'sort' => false,
         ],
         'dnsla' => [
             'name' => 'DNSLA',
@@ -286,6 +293,7 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => true,
+            'sort' => false,
         ],
         'qingcloud' => [
             'name' => '青云',
@@ -321,6 +329,7 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => false,
+            'sort' => false,
         ],
         'bt' => [
             'name' => '宝塔域名',
@@ -362,6 +371,7 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => true,
+            'sort' => false,
         ],
         'cloudflare' => [
             'name' => 'Cloudflare',
@@ -406,6 +416,43 @@ class DnsHelper
             'weight' => false,
             'page' => false,
             'add' => true,
+            'sort' => true,
+        ],
+        'aws' => [
+            'name' => 'AWS Route 53',
+            'icon' => 'aws.png',
+            'note' => '基于 Amazon Route 53 管理域名解析，AccessKey 需具备 Route 53 权限',
+            'config' => [
+                'AccessKeyId' => [
+                    'name' => 'AccessKeyId',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'SecretAccessKey' => [
+                    'name' => 'SecretAccessKey',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'remark' => 0,
+            'status' => false,
+            'redirect' => false,
+            'log' => false,
+            'weight' => false,
+            'page' => true,
+            'add' => true,
+            'sort' => false,
         ],
         'namesilo' => [
             'name' => 'NameSilo',
@@ -441,6 +488,43 @@ class DnsHelper
             'weight' => false,
             'page' => true,
             'add' => false,
+            'sort' => false,
+        ],
+        'henet' => [
+            'name' => 'HE DNS',
+            'icon' => 'he.ico',
+            'note' => '',
+            'config' => [
+                'username' => [
+                    'name' => '用户名/邮箱',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'password' => [
+                    'name' => '密码',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'remark' => 0,
+            'status' => false,
+            'redirect' => false,
+            'log' => false,
+            'weight' => false,
+            'page' => true,
+            'add' => false,
+            'sort' => false,
         ],
         'spaceship' => [
             'name' => 'Spaceship',
@@ -476,6 +560,7 @@ class DnsHelper
             'weight' => false,
             'page' => false,
             'add' => false,
+            'sort' => false,
         ],
         'powerdns' => [
             'name' => 'PowerDNS',
@@ -517,6 +602,7 @@ class DnsHelper
             'weight' => false,
             'page' => true,
             'add' => true,
+            'sort' => false,
         ],
         'technitium' => [
             'name' => 'Technitium',
@@ -552,6 +638,7 @@ class DnsHelper
             'weight' => false,
             'page' => true,
             'add' => true,
+            'sort' => false,
         ],
         'aliyunesa' => [
             'name' => '阿里云ESA',
@@ -597,6 +684,7 @@ class DnsHelper
             'weight' => false,
             'page' => false,
             'add' => false,
+            'sort' => false,
         ],
         'tencenteo' => [
             'name' => '腾讯云EO',
@@ -642,6 +730,7 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => false,
+            'sort' => true,
         ],
         'dnsmgr' => [
             'name' => '同系统对接',
@@ -683,6 +772,100 @@ class DnsHelper
             'weight' => true,
             'page' => false,
             'add' => false,
+            'sort' => false,
+        ],
+        'goedge' => [
+            'name' => 'GoEdge智能DNS',
+            'icon' => 'logo.png',
+            'note' => '需要填写GoEdge HTTP API节点地址，不是管理后台地址或gRPC地址',
+            'config' => [
+                'base_url' => [
+                    'name' => 'API节点地址',
+                    'type' => 'input',
+                    'placeholder' => '例如：https://api.example.com:8004',
+                    'required' => true,
+                ],
+                'accessKeyId' => [
+                    'name' => 'AccessKey ID',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'accessKey' => [
+                    'name' => 'AccessKey',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'type' => [
+                    'name' => 'AccessKey类型',
+                    'type' => 'radio',
+                    'options' => [
+                        'admin' => '管理员',
+                        'user' => '用户',
+                    ],
+                    'value' => 'admin',
+                ],
+                'nsClusterId' => [
+                    'name' => 'DNS集群ID',
+                    'type' => 'input',
+                    'placeholder' => '例如：1',
+                    'required' => true,
+                ],
+                'userId' => [
+                    'name' => 'GoEdge用户ID（可选）',
+                    'type' => 'input',
+                    'placeholder' => '留空表示不指定用户',
+                    'required' => false,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0',
+                ],
+            ],
+            'remark' => 2,
+            'status' => true,
+            'redirect' => false,
+            'log' => false,
+            'weight' => true,
+            'page' => false,
+            'add' => true,
+            'sort' => false,
+        ],
+        'dynv6' => [
+            'name' => 'dynv6',
+            'icon' => 'dynv6.ico',
+            'note' => '',
+            'config' => [
+                'token' => [
+                    'name' => 'API Token',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'remark' => 0,
+            'status' => false,
+            'redirect' => false,
+            'log' => false,
+            'weight' => false,
+            'page' => false,
+            'add' => false,
+            'sort' => false,
         ],
     ];
 
@@ -698,12 +881,15 @@ class DnsHelper
         'bt' => ['DEF' => '0', 'CT' => '285344768', 'CU' => '285345792', 'CM' => '285346816'],
         'qingcloud' => ['DEF' => '0', 'CT' => '2', 'CU' => '3', 'CM' => '4', 'AB' => '8'],
         'cloudflare' => ['DEF' => '0'],
+        'aws' => ['DEF' => 'default'],
         'namesilo' => ['DEF' => 'default'],
+        'henet' => ['DEF' => 'default'],
         'powerdns' => ['DEF' => 'default'],
         'spaceship' => ['DEF' => 'default'],
         'aliyunesa' => ['DEF' => '0'],
         'tencenteo' => ['DEF' => 'Default'],
-        'cccyun' => ['DEF' => 'default'],
+        'dnsmgr' => ['DEF' => 'default'],
+        'goedge' => ['DEF' => 'default'],
     ];
 
     public static function getList()
@@ -748,6 +934,7 @@ class DnsHelper
         $class = "\\app\\lib\\dns\\{$dnstype}";
         if (class_exists($class)) {
             $config = json_decode($account['config'] ?? '', true);
+            if (!is_array($config)) $config = [];
             $config['domain'] = $domain;
             $config['domainid'] = $domainid;
             $model = new $class($config);
@@ -765,6 +952,7 @@ class DnsHelper
         $class = "\\app\\lib\\dns\\{$dnstype}";
         if (class_exists($class)) {
             $config = json_decode($account['config'] ?? '', true);
+            if (!is_array($config)) $config = [];
             $config['domain'] = $account['name'];
             $config['domainid'] = $account['thirdid'];
             $model = new $class($config);

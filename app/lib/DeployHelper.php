@@ -349,6 +349,53 @@ class DeployHelper
                 ],
             ],
         ],
+        'directadmin' => [
+            'name' => 'DirectAdmin',
+            'class' => 1,
+            'icon' => 'directadmin.png',
+            'desc' => '通过 DirectAdmin 官方 API 自动部署域名 SSL 证书',
+            'note' => '使用 HTTPS 和 HTTP Basic Authentication。认证密码可填写 DirectAdmin 账户密码；如服务商开放 Login Key，也可填写 Login Key。',
+            'tasknote' => '填写 DirectAdmin 中已存在的目标域名。多个域名可用换行或逗号分隔；系统会分别调用 CMD_API_SSL 更新证书。',
+            'inputs' => [
+                'url' => [
+                    'name' => '面板地址',
+                    'type' => 'input',
+                    'placeholder' => 'https://server.example.com:2222',
+                    'note' => '必须使用 HTTPS，不要带 CMD_API_SSL 等路径',
+                    'required' => true,
+                ],
+                'username' => [
+                    'name' => '用户名',
+                    'type' => 'input',
+                    'placeholder' => 'DirectAdmin 登录用户名',
+                    'required' => true,
+                ],
+                'password' => [
+                    'name' => '认证密码',
+                    'type' => 'input',
+                    'placeholder' => 'DirectAdmin 账户密码或 Login Key',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0',
+                ],
+            ],
+            'taskinputs' => [
+                'domain' => [
+                    'name' => 'DirectAdmin 域名',
+                    'type' => 'textarea',
+                    'placeholder' => "example.com\nsecond.example",
+                    'note' => '必须是该 DirectAdmin 账户中已存在的域名；多个域名可换行或用逗号分隔。',
+                    'required' => true,
+                ],
+            ],
+        ],
         'btwaf' => [
             'name' => '堡塔云WAF',
             'class' => 1,
@@ -1460,6 +1507,7 @@ ctrl+x 保存退出<br/>',
                         ['value'=>'lighthouse', 'label'=>'轻量应用服务器'],
                         ['value'=>'upload', 'label'=>'上传到证书管理'],
                         ['value'=>'update', 'label'=>'更新证书内容（证书ID不变）'],
+                        ['value'=>'update_new', 'label'=>'更新证书内容（生成新的ID）'],
                     ],
                     'value' => 'cdn',
                     'required' => true,
@@ -1559,7 +1607,7 @@ ctrl+x 保存退出<br/>',
                     'name' => '绑定的域名',
                     'type' => 'input',
                     'placeholder' => '',
-                    'show' => 'product!=\'clb\'&&product!=\'tke\'&&product!=\'upload\'',
+                    'show' => 'product!=\'clb\'&&product!=\'tke\'&&product!=\'upload\'&&product!=\'update\'&&product!=\'update_new\'',
                     'note' => 'CDN、EO、WAF多个域名可用,隔开，其他只能填写1个域名',
                     'required' => true,
                 ],
@@ -1567,9 +1615,15 @@ ctrl+x 保存退出<br/>',
                     'name' => '证书ID',
                     'type' => 'input',
                     'placeholder' => '要更新的证书ID，在我的证书列表查看',
-                    'show' => 'product==\'update\'',
+                    'show' => 'product==\'update\'||product==\'update_new\'',
                     'required' => true,
-                    'note' => '当前接口需联系加白使用',
+                    'note' => '如果使用证书ID不变接口更新，则需联系加白使用',
+                ],
+                'delete_old_cert' => [
+                    'name' => '更新成功后删除旧证书',
+                    'type' => 'checkbox',
+                    'value' => false,
+                    'show' => 'product==\'update_new\'',
                 ],
             ],
         ],
@@ -1787,6 +1841,37 @@ ctrl+x 保存退出<br/>',
                     'required' => true,
                 ],
             ],
+        ],
+        'axisnow' => [
+            'name' => 'AxisNow',
+            'class' => 2,
+            'icon' => 'axisnow.png',
+            'desc' => '支持上传证书到AxisNow平台',
+            'note' => '支持上传证书到AxisNow平台',
+            'inputs' => [
+                'name' => [
+                    'name' => '租户名',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'token' => [
+                    'name' => 'API 令牌',
+                    'type' => 'input',
+                    'placeholder' => '',
+                    'required' => true,
+                ],
+                'proxy' => [
+                    'name' => '使用代理服务器',
+                    'type' => 'radio',
+                    'options' => [
+                        '0' => '否',
+                        '1' => '是',
+                    ],
+                    'value' => '0'
+                ],
+            ],
+            'taskinputs' => [],
         ],
         'upyun' => [
             'name' => '又拍云',
@@ -2122,6 +2207,7 @@ ctrl+x 保存退出<br/>',
                     'options' => [
                         ['value'=>'cdn', 'label'=>'CDN'],
                         ['value'=>'cdnpro', 'label'=>'CDN Pro'],
+                        ['value'=>'cdnpro_certificate', 'label'=>'CDN Pro证书管理'],
                         ['value'=>'certificate', 'label'=>'证书管理']
                     ],
                     'value' => 'cdn',
@@ -2144,7 +2230,7 @@ ctrl+x 保存退出<br/>',
                 'cert_id' => [
                     'name' => '证书ID',
                     'type' => 'input',
-                    'show' => 'product==\'certificate\'',
+                    'show' => 'product==\'certificate\'||product==\'cdnpro_certificate\'',
                     'placeholder' => '',
                     'required' => true,
                 ],
@@ -2907,6 +2993,7 @@ ctrl+x 保存退出<br/>',
         $class = "\\app\\lib\\deploy\\{$type}";
         if (class_exists($class)) {
             $config = json_decode($account['config'], true);
+            if (!is_array($config)) $config = [];
             $model = new $class($config);
             return $model;
         }

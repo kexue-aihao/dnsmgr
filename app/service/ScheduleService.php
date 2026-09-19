@@ -23,7 +23,7 @@ class ScheduleService
             try {
                 $this->execute_one($row);
                 echo '定时切换任务' . $row['id'] . '执行成功' . "\n";
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 echo '定时切换任务' . $row['id'] . '执行失败,' . $e->getMessage() . "\n";
             }
         }
@@ -33,6 +33,8 @@ class ScheduleService
 
     public function execute_one($row)
     {
+        $row = Db::name('sctask')->where('id', $row['id'])->find();
+        if (!$row) throw new Exception('定时切换任务不存在');
         $drow = Db::name('domain')->alias('A')->join('account B', 'A.aid = B.id')->where('A.id', $row['did'])->field('A.*,B.type,B.config')->find();
         if (!$drow) throw new Exception('域名不存在');
 
@@ -40,6 +42,7 @@ class ScheduleService
 
         $domain = $row['rr'] . '.' . $drow['name'];
         $dns = DnsHelper::getModel2($drow);
+        if (!$dns) throw new Exception('DNS模块不存在');
         if ($row['switchtype'] == 1) {
             $res = $dns->setDomainRecordStatus($row['recordid'], '1');
             if ($res) {
@@ -63,11 +66,21 @@ class ScheduleService
             }
         } else {
             $recordinfo = json_decode($row['recordinfo'], true);
+            if (!is_array($recordinfo) || !isset($recordinfo['Line'], $recordinfo['TTL'])) {
+                throw new Exception('解析记录信息不完整，无法执行切换');
+            }
             if ($drow['type'] == 'cloudflare' && !isNullOrEmpty($row['line'])) {
                 $recordinfo['Line'] = $row['line'];
             }
             $res = $dns->updateDomainRecord($row['recordid'], $row['rr'], getDnsType($row['value']), $row['value'], $recordinfo['Line'], $recordinfo['TTL']);
             if ($res) {
+                TaskRecordService::syncRecordId($drow, $row['recordid'], $res, [
+                    'Name' => $row['rr'],
+                    'Type' => getDnsType($row['value']),
+                    'Value' => $row['value'],
+                    'Line' => $recordinfo['Line'],
+                    'TTL' => $recordinfo['TTL'],
+                ]);
                 $this->add_log($domain, '修改解析', $row['rr'].' ['.getDnsType($row['value']).'] '.$row['value'].' (线路:'.$recordinfo['Line'].' TTL:'.$recordinfo['TTL'].')');
             } else {
                 $this->add_log($domain, '修改解析失败', $dns->getError());
@@ -88,12 +101,14 @@ class ScheduleService
                 }
             } elseif ($row['cycle'] == 1) {
                 $weekday = intval($row['switchdate']); // 0-6, 0=周日
-                $nexttime = strtotime("last Sunday +{$weekday} days {$row['switchtime']}:00");
-                if ($nexttime <= time()) {
-                    $nexttime = strtotime("+1 week", $nexttime);
-                    if ($nexttime <= time()) {
-                        $nexttime = strtotime("+1 week", $nexttime);
-                    }
+                if ($weekday < 0 || $weekday > 6) $weekday = 0;
+                $currentDow = (int)date('w');
+                $daysAhead = ($weekday - $currentDow + 7) % 7;
+                $nexttime = strtotime(date('Y-m-d') . ' ' . $row['switchtime'] . ':00');
+                if ($daysAhead > 0) {
+                    $nexttime = strtotime('+' . $daysAhead . ' day', $nexttime);
+                } elseif ($nexttime <= time()) {
+                    $nexttime = strtotime('+1 week', $nexttime);
                 }
             } else {
                 $nexttime = strtotime(date('Y-m-d') . ' ' . $row['switchtime'] . ':00');

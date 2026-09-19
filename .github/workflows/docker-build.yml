@@ -1,9 +1,12 @@
 # 手动触发：构建多架构镜像（amd64 / arm64），仅推送 latest 至 Docker Hub 与华为云 SWR。
-# Dockerfile 与构建上下文位于 .github/docker/ 目录。
+# Dockerfile 位于 .github/docker/，构建上下文为仓库根目录，源码使用本次 checkout。
 #
 # 需在仓库 Settings → Secrets 中配置：
 #   DOCKERHUB_USERNAME / DOCKERHUB_TOKEN（Docker Hub 访问令牌）
-#   HUAWEI_SWR_USERNAME / HUAWEI_SWR_PASSWORD（华为云 SWR 登录凭证，与本地 docker login swr.cn-east-3.myhuaweicloud.com 一致）
+#   HUAWEI_SWR_USERNAME / HUAWEI_SWR_PASSWORD（对应华为云 SWR 仓库的登录凭证）
+# 可选 Repository Variables（镜像名不含标签）：
+#   DOCKERHUB_IMAGE，默认 <当前仓库所有者>/dnsmgr
+#   HUAWEI_SWR_IMAGE，默认 swr.cn-east-3.myhuaweicloud.com/<当前仓库所有者>/dnsmgr
 
 name: Docker Build
 
@@ -18,7 +21,20 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+
+      - name: Resolve image names
+        id: images
+        shell: bash
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          HUAWEI_SWR_IMAGE: ${{ vars.HUAWEI_SWR_IMAGE }}
+        run: |
+          set -euo pipefail
+          image_owner="${GITHUB_REPOSITORY_OWNER,,}"
+          dockerhub_image="${DOCKERHUB_IMAGE:-$image_owner/dnsmgr}"
+          swr_image="${HUAWEI_SWR_IMAGE:-swr.cn-east-3.myhuaweicloud.com/$image_owner/dnsmgr}"
+          printf 'dockerhub=%s\nswr=%s\nswr_registry=%s\n' "$dockerhub_image" "$swr_image" "${swr_image%%/*}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -27,33 +43,33 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.6.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Log in to Huawei SWR
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.6.0
         with:
-          registry: swr.cn-east-3.myhuaweicloud.com
+          registry: ${{ steps.images.outputs.swr_registry }}
           username: ${{ secrets.HUAWEI_SWR_USERNAME }}
           password: ${{ secrets.HUAWEI_SWR_PASSWORD }}
 
       - name: Build and push (Docker Hub + Huawei SWR, latest only)
         uses: docker/build-push-action@v7
         with:
-          context: .github/docker
+          context: .
           file: .github/docker/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
-          # 每次运行唯一，打破「下载源码 + composer」等层的缓存，否则会一直用首次构建时的层
+          outputs: type=registry,oci-mediatypes=false
+          # 每次运行唯一，刷新 Composer 安装层；COPY 会跟随本次 checkout 的源码变化。
           build-args: |
             CACHE_BUST=${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           # 避免向仓库推送 attestations；部分镜像仓库（含部分 SWR 场景）无法解析导致 “fail to parse manifest.json”
           provenance: false
           sbom: false
           tags: |
-            netcccyun/dnsmgr:latest
-            swr.cn-east-3.myhuaweicloud.com/netcccyun/dnsmgr:latest
+            ${{ steps.images.outputs.dockerhub }}:latest
+            ${{ steps.images.outputs.swr }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

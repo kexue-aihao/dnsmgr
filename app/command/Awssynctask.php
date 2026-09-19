@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace app\command;
 
-use Exception;
 use think\console\Command;
 use think\console\Input;
 use think\console\Output;
@@ -33,7 +32,7 @@ class Awssynctask extends Command
             try {
                 (new AwsSyncService())->execute();
                 config_set('aws_sync_run_time', date('Y-m-d H:i:s'));
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 config_set('aws_sync_error', $e->getMessage());
                 $output->writeln('[Error] ' . $e->getMessage());
             }

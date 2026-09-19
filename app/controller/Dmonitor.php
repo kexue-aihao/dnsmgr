@@ -131,7 +131,7 @@ class Dmonitor extends BaseController
                 $err = $this->validateBackupSwitch($task, $poolIps);
                 if ($err) return json(['code' => -1, 'msg' => $err]);
             }
-            if (Db::name('dmtask')->where('recordid', $task['recordid'])->find()) {
+            if (Db::name('dmtask')->where('did', $task['did'])->whereRaw('HEX(`recordid`) = ?', [strtoupper(bin2hex((string)$task['recordid']))])->find()) {
                 return json(['code' => -1, 'msg' => '当前容灾切换策略已存在']);
             }
             $taskId = Db::name('dmtask')->insertGetId($task);
@@ -172,7 +172,7 @@ class Dmonitor extends BaseController
                 $err = $this->validateBackupSwitch($task, $poolIps, $id);
                 if ($err) return json(['code' => -1, 'msg' => $err]);
             }
-            if (Db::name('dmtask')->where('recordid', $task['recordid'])->where('id', '<>', $id)->find()) {
+            if (Db::name('dmtask')->where('did', $task['did'])->whereRaw('HEX(`recordid`) = ?', [strtoupper(bin2hex((string)$task['recordid']))])->where('id', '<>', $id)->find()) {
                 return json(['code' => -1, 'msg' => '当前容灾切换策略已存在']);
             }
             Db::name('dmtask')->where('id', $id)->update($task);

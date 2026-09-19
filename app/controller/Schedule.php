@@ -92,7 +92,7 @@ class Schedule extends BaseController
             if (empty($task['did']) || empty($task['rr']) || empty($task['recordid'])) {
                 return json(['code' => -1, 'msg' => '必填项不能为空']);
             }
-            if (Db::name('sctask')->where('recordid', $task['recordid'])->where('switchtype', $task['switchtype'])->where('switchtime', $task['switchtime'])->find()) {
+            if (Db::name('sctask')->where('did', $task['did'])->whereRaw('HEX(`recordid`) = ?', [strtoupper(bin2hex((string)$task['recordid']))])->where('switchtype', $task['switchtype'])->where('switchtime', $task['switchtime'])->find()) {
                 return json(['code' => -1, 'msg' => '当前定时切换策略已存在']);
             }
             $id = Db::name('sctask')->insertGetId($task);
@@ -119,7 +119,7 @@ class Schedule extends BaseController
             if (empty($task['did']) || empty($task['rr']) || empty($task['recordid'])) {
                 return json(['code' => -1, 'msg' => '必填项不能为空']);
             }
-            if (Db::name('sctask')->where('recordid', $task['recordid'])->where('switchtype', $task['switchtype'])->where('switchtime', $task['switchtime'])->where('id', '<>', $id)->find()) {
+            if (Db::name('sctask')->where('did', $task['did'])->whereRaw('HEX(`recordid`) = ?', [strtoupper(bin2hex((string)$task['recordid']))])->where('switchtype', $task['switchtype'])->where('switchtime', $task['switchtime'])->where('id', '<>', $id)->find()) {
                 return json(['code' => -1, 'msg' => '当前定时切换策略已存在']);
             }
             Db::name('sctask')->where('id', $id)->update($task);

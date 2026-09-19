@@ -63,7 +63,7 @@ class Dmtask extends Command
                             (new TaskRunner())->execute($row);
                         } catch (\Swoole\ExitException $e) {
                             echo $e->getStatus() . "\n";
-                        } catch (Exception $e) {
+                        } catch (\Throwable $e) {
                             echo $e->__toString() . "\n";
                         }
                     });

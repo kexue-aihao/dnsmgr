@@ -200,6 +200,9 @@ class OptimizeService
             $info = $this->get_ip_address2($row['cdn_type'], $ip_type);
 
             $dns = DnsHelper::getModel($drow['aid'], $drow['name'], $drow['thirdid']);
+            if (!$dns) {
+                throw new Exception('DNS模块不存在');
+            }
             $domainRecords = $dns->getSubDomainRecords($row['rr'], 1, 100);
             if (!$domainRecords) {
                 throw new Exception('获取记录列表失败，'.$dns->getError());
@@ -228,7 +231,7 @@ class OptimizeService
                     continue;
                 }
                 $line_name = DnsHelper::$line_name[$drow['type']][$line];
-                $this->process_dns_line($dns, $row, $domainRecords['list'], $record_num, $get_ips, $line_name, $ip_type);
+                $this->process_dns_line($dns, $row, $domainRecords['list'], $record_num, $get_ips, $line_name, $ip_type, $drow);
             }
         }
 
@@ -236,7 +239,7 @@ class OptimizeService
     }
 
     //处理单个线路的解析记录
-    private function process_dns_line($dns, $row, $record_list, $record_num, $get_ips, $line_name, $ip_type)
+    private function process_dns_line($dns, $row, $record_list, $record_num, $get_ips, $line_name, $ip_type, $domain)
     {
         $records = array_filter($record_list, function ($v) use ($line_name) {
             return $v['Line'] == $line_name;
@@ -278,6 +281,13 @@ class OptimizeService
                         if (!$res) {
                             throw new Exception('修改解析失败，'.$dns->getError());
                         }
+                        TaskRecordService::syncRecordId($domain, $record['RecordId'], $res, [
+                            'Name' => $row['rr'],
+                            'Type' => $ip_type == 'v6' ? 'AAAA' : 'A',
+                            'Value' => $add_ip,
+                            'Line' => $line_name,
+                            'TTL' => $row['ttl'],
+                        ]);
                         $this->change_num++;
                         $correct_count++;
                     } else {

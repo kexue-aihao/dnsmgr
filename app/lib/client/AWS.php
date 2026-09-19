@@ -137,7 +137,7 @@ class AWS
      */
     public function requestXmlN($method, $path, $params = [], $xml = null, $etag = false)
     {
-        if (!empty($params)) {
+        if (is_array($params) && !empty($params)) {
             $params = array_filter($params, function ($a) {
                 return $a !== null;
             });
@@ -147,7 +147,9 @@ class AWS
         $body = '';
         $query = [];
         if ($method == 'GET' || $method == 'DELETE') {
-            $query = $params;
+            $query = is_array($params) ? $params : [];
+        } elseif (is_string($params)) {
+            $body = $params;
         } else {
             $body = !empty($params) ? $this->array2xml($params, $xml) : '';
         }
@@ -159,6 +161,9 @@ class AWS
             'X-Amz-Date' => $date,
             //'X-Amz-Content-Sha256' => hash("sha256", $body),
         ];
+        if ($method != 'GET' && $method != 'DELETE') {
+            $headers['Content-Type'] = 'application/xml';
+        }
         if ($this->etag) {
             $headers['If-Match'] = $this->etag;
         }
@@ -286,7 +291,6 @@ class AWS
         $errno = curl_errno($ch);
         if ($errno) {
             $errmsg = curl_error($ch);
-            curl_close($ch);
             throw new Exception('Curl error: ' . $errmsg);
         }
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -297,7 +301,6 @@ class AWS
             $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
             $response = substr($response, $headerSize);
         }
-        curl_close($ch);
 
         if ($httpCode >= 200 && $httpCode < 300) {
             if (empty($response)) return true;
@@ -307,6 +310,9 @@ class AWS
             $arr = $this->xml2array($response);
             if (isset($arr['Error']['Message'])) {
                 throw new Exception($arr['Error']['Message']);
+            } elseif (isset($arr['Messages']['Message'])) {
+                $msg = $arr['Messages']['Message'];
+                throw new Exception(is_array($msg) ? implode('; ', $msg) : $msg);
             } else {
                 throw new Exception('HTTP Code: ' . $httpCode);
             }
@@ -355,7 +361,8 @@ class AWS
                 }
 
             } else {
-                $xml->addChild($key, $value);
+                $escapedValue = htmlspecialchars((string)$value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+                $xml->addChild($tagName, $escapedValue);
             }
         }
 
